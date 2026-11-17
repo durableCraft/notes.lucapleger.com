@@ -1,6 +1,6 @@
 // Gemeinsame Bedienelemente: Toast, Dialog, Schublade, Tastatur-Abstand.
 
-import { hydrateIcons } from './icons.js';
+import { hydrateIcons, wrapLabels } from './icons.js';
 import { html } from './util.js';
 
 // ---------- Toast -----------------------------------------------------------
@@ -22,6 +22,7 @@ export function toast(text, opts = {}) {
   btn.onclick = null;
   if (opts.action) {
     btn.textContent = opts.action;
+    wrapLabels(btn);
     btn.onclick = () => {
       hideToast();
       opts.onAction?.();

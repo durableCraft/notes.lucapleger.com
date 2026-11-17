@@ -32,10 +32,33 @@ export const icons = {
   warning: `<svg ${a}><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
 };
 
+// Knöpfe und Abzeichen, deren Beschriftung optisch exakt mittig sitzen soll
+const LABEL_HOSTS = '.btn, .tab, .badge, .toast-action, .avatar';
+
+/**
+ * Packt freien Text in Knöpfen in <span class="t">. Nur so greift die
+ * CSS-Regel text-box (Zeilenbox auf Versalhöhe/Grundlinie kürzen), denn
+ * sie wirkt auf Flex-Elemente, nicht auf losen Text im Flex-Container.
+ */
+export function wrapLabels(root = document) {
+  const hosts = [...root.querySelectorAll(LABEL_HOSTS)];
+  if (root.matches?.(LABEL_HOSTS)) hosts.push(root);
+  for (const el of hosts) {
+    for (const n of [...el.childNodes]) {
+      if (n.nodeType !== Node.TEXT_NODE || !n.textContent.trim()) continue;
+      const span = document.createElement('span');
+      span.className = 't';
+      n.replaceWith(span);
+      span.append(n);
+    }
+  }
+}
+
 /** Ersetzt alle [data-icon]-Platzhalter unterhalb von root durch das SVG. */
 export function hydrateIcons(root = document) {
   for (const el of root.querySelectorAll('[data-icon]:empty')) {
     const svg = icons[el.dataset.icon];
     if (svg) el.innerHTML = svg;
   }
+  wrapLabels(root);
 }

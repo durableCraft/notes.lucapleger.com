@@ -288,7 +288,7 @@ async function refreshSidebar() {
   renderHistory($('history'), notes, state.current.id);
   const count = $('trash-count');
   count.hidden = trash.length === 0;
-  count.textContent = String(trash.length);
+  count.innerHTML = `<span class="t">${trash.length}</span>`;
   if (state.view === 'trash') renderTrash($('view-trash'), trash);
 }
 

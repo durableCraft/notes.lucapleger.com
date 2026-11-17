@@ -43,6 +43,7 @@ export async function renderAdmin(container, me) {
       </div>
       <div class="tab-panel" id="admin-panel" role="tabpanel"></div>
     </div>`);
+  hydrateIcons(container);
   const panel = container.querySelector('#admin-panel');
   const tabs = container.querySelector('.tabs');
 

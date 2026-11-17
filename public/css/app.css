@@ -1201,3 +1201,19 @@ select.input {
 .dialog form > .card-sub { margin-bottom: 18px; }
 .dialog form > .card-sub + .dialog-actions { margin-top: 6px; }
 .action-list .btn { min-width: 0; white-space: normal; text-align: left; line-height: 1.3; padding-block: 8px; }
+
+/* ---------- Beschriftungen optisch mittig ---------------------------------
+   Monospace-Schriften haben über den Buchstaben mehr Raum als darunter.
+   text-box kürzt die Zeilenbox auf Versalhöhe bis Grundlinie, damit Text
+   in Knöpfen, Reitern und Abzeichen genau mittig sitzt. (Browser ohne
+   Unterstützung zentrieren wie bisher über die Zeilenhöhe.) */
+.t,
+.fmt-btn > b, .fmt-btn > i, .fmt-btn > u,
+.status > span:not([data-icon]),
+.foot-btn > span:not([data-icon]) {
+  line-height: 1.25;
+  text-box: trim-both cap alphabetic;
+}
+.tab, .toast-action { display: inline-flex; align-items: center; justify-content: center; }
+.toast-action { min-height: 32px; }
+.count { display: inline-flex; align-items: center; justify-content: center; height: 20px; }
