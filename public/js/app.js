@@ -406,9 +406,30 @@ async function loadStatus() {
   else if (cached) state.sessionExpired = true;
 }
 
+/** Mit Konto, aber ohne Verbindung: nur ein Hinweis (die Zettel liegen auf dem Server). */
+function showOffline() {
+  document.body.dataset.view = 'offline';
+  for (const v of VIEWS) $(`view-${v}`).hidden = true;
+  $('view-offline').hidden = false;
+  $('history').innerHTML = '<p class="history-empty">Offline – deine Zettel werden geladen, sobald die Verbindung wieder da ist.</p>';
+  document.title = 'Keine Verbindung – Notizzettel';
+  $('btn-retry').addEventListener('click', () => location.reload());
+  window.addEventListener('online', () => location.reload());
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+  navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('Service Worker nicht registriert:', err.message));
+}
+
 async function main() {
   hydrateIcons();
+  registerServiceWorker();
   await loadStatus();
+  if (!state.status && cachedUser()) {
+    showOffline();
+    return;
+  }
   removeLegacyCaches();
   // Mit Konto: nichts auf dem Gerät speichern, nur im Arbeitsspeicher halten
   state.store = state.user
@@ -594,7 +615,7 @@ async function main() {
     navigator.storage?.persist?.().catch(() => {});
     if (!state.store.persistent) {
       toast('Speichern auf diesem Gerät ist nicht möglich (privater Modus?). Zettel gehen beim Schließen verloren.', { duration: 10000 });
-    } else if (!state.status) {
+    } else if (!state.status && navigator.onLine) {
       toast('Der Server ist gerade nicht erreichbar. Deine Zettel werden vorerst nur auf diesem Gerät gespeichert.', { duration: 10000 });
     }
   }

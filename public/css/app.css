@@ -1226,3 +1226,9 @@ select.input {
   .passkey-list .row.is-static .row-main { flex-basis: auto; }
   .passkey-list .row-badges { display: none; }
 }
+
+/* Offline mit Konto: nur Hinweis, keine Bedienelemente */
+body[data-view="offline"] .topbar .icon-btn:not(.only-drawer),
+body[data-view="offline"] .fmt,
+body[data-view="offline"] .divider,
+body[data-view="offline"] .sidebar-foot { display: none; }

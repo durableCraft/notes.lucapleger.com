@@ -38,7 +38,13 @@ export function createApp(cfg) {
   api.use((req, res, next) => next(notFound()));
   app.use('/api', api);
 
-  app.use(express.static(publicDir, { index: false }));
+  app.use(express.static(publicDir, {
+    index: false,
+    setHeaders(res, file) {
+      // Service Worker und Manifest immer neu prüfen, damit Updates ankommen
+      if (file.endsWith('sw.js') || file.endsWith('.webmanifest')) res.set('Cache-Control', 'no-cache');
+    },
+  }));
 
   app.get(APP_ROUTES, (req, res) => {
     res.set('Cache-Control', 'no-cache');

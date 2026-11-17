@@ -475,10 +475,15 @@ export async function afterLogin(user) {
  * @returns {Promise<number>} Anzahl übernommener Zettel
  */
 export async function offerLocalNotes() {
+  // Nur öffnen, wenn es die lokale Datenbank gibt – Öffnen würde sie sonst anlegen
+  try {
+    const dbs = await indexedDB.databases?.();
+    if (dbs && !dbs.some((d) => d.name === LOCAL_DB)) return 0;
+  } catch { /* databases() nicht unterstützt: normal weiter */ }
   const local = await new NoteStore(LOCAL_DB).open();
   const notes = (await local.all()).filter((n) => !n.purged);
   if (!notes.length) {
-    local.db.close();
+    await local.destroy();   // leere Datenbank nicht auf dem Gerät lassen
     return 0;
   }
   const active = notes.filter((n) => !n.deletedAt).length;
