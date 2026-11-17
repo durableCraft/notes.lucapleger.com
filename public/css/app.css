@@ -267,7 +267,27 @@ a { color: var(--accent); }
   position: relative;
 }
 .history-item:hover { background: var(--hover); }
-.history-item[aria-current="true"] { background: var(--select); }
+/* Auswahl: Glasscheibe wie bei den Knöpfen (Füllung + Lichtkante am Rand) */
+.history-item[aria-current="true"],
+.foot-btn[aria-current="page"] {
+  background: var(--glass-fill);
+  box-shadow: 0 0 0 .5px var(--glass-line), var(--glass-drop);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+}
+.history-item[aria-current="true"]::after,
+.foot-btn[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(145deg, var(--glass-rim-1) 0%, var(--glass-rim-2) 32%, var(--glass-rim-2) 68%, var(--glass-rim-1) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
 .history-item[aria-current="true"]::before {
   content: "";
   position: absolute;
@@ -304,6 +324,7 @@ a { color: var(--accent); }
 }
 
 .foot-btn {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -314,7 +335,7 @@ a { color: var(--accent); }
   font-size: 14px;
 }
 .foot-btn:hover { background: var(--hover); }
-.foot-btn[aria-current="page"] { background: var(--select); }
+
 .foot-btn [data-icon] { color: var(--muted); width: 18px; height: 18px; }
 .count {
   margin-left: auto;
