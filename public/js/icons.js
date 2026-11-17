@@ -24,6 +24,11 @@ export const icons = {
   logout: `<svg ${a}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 8l-4 4 4 4M6 12h10"/></svg>`,
   cloud: `<svg ${a}><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.5 4.25 4.25 0 0 0 7 18z"/></svg>`,
   cloudOff: `<svg ${a}><path d="M3 3l18 18"/><path d="M8.5 6.4A6 6 0 0 1 17.5 10a4 4 0 0 1 2.4 6.9M16 18H7a4.25 4.25 0 0 1-.9-8.5"/></svg>`,
+  copy: `<svg ${a}><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`,
+  shield: `<svg ${a}><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>`,
+  mail: `<svg ${a}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>`,
+  userPlus: `<svg ${a}><circle cx="10" cy="8" r="4"/><path d="M3 20c1.4-3.4 4-5 7-5s5.6 1.6 7 5M19 8v6M16 11h6"/></svg>`,
+  chevronRight: `<svg ${a}><path d="M9 6l6 6-6 6"/></svg>`,
   warning: `<svg ${a}><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
 };
 

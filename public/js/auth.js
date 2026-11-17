@@ -3,7 +3,7 @@
 import { api } from './api.js';
 import { html } from './util.js';
 import { hydrateIcons } from './icons.js';
-import { confirmDialog, toast } from './ui.js';
+import { confirmDialog, toast, bindForm, fieldError, formDialog } from './ui.js';
 import { NoteStore, LOCAL_DB, LEGACY_PREFIX } from './store.js';
 
 const USER_KEY = 'notizzettel.user';
@@ -36,45 +36,7 @@ function broadcastReload() {
   } catch { /* egal */ }
 }
 
-// ---------- Formulare -------------------------------------------------------
-
-/**
- * Verbindet ein Formular mit einer asynchronen Aktion: Knopf sperren,
- * Fehler im Formular anzeigen, betroffenes Feld markieren.
- */
-function bindForm(form, action) {
-  const errorEl = form.querySelector('.form-error');
-  const submit = form.querySelector('[type="submit"]');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (submit.disabled) return;
-    errorEl.hidden = true;
-    form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
-    submit.disabled = true;
-    try {
-      await action(Object.fromEntries(new FormData(form)), form);
-    } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.hidden = false;
-      const field = err.data?.field || err.field;
-      const input = field && form.elements[field];
-      if (input) {
-        input.setAttribute('aria-invalid', 'true');
-        input.focus();
-      }
-    } finally {
-      submit.disabled = false;
-    }
-  });
-}
-
-function fieldError(field, message) {
-  const err = new Error(message);
-  err.field = field;
-  return err;
-}
-
-const passwordHint = 'Mindestens 8 Zeichen. Ein Satz aus mehreren Wörtern ist sicher und gut zu merken.';
+export const passwordHint = 'Mindestens 8 Zeichen. Ein Satz aus mehreren Wörtern ist sicher und gut zu merken.';
 
 // ---------- Ersteinrichtung -------------------------------------------------
 
@@ -168,20 +130,208 @@ export function renderLogin(container, status, { expired = false } = {}) {
       </div>
     </div>`);
   hydrateIcons(container);
-  bindForm(container.querySelector('form'), async (data) => {
-    const { user } = await api('POST', '/api/login', {
+  const form = container.querySelector('form');
+  bindForm(form, async (data) => {
+    const r = await api('POST', '/api/login', {
       email: data.email, password: data.password, remember: data.remember === 'on',
+    });
+    if (r.twoFactor) {
+      renderCodeStep(container, r, () => renderLogin(container, status, { expired }));
+      return;
+    }
+    await afterLogin(r.user);
+  });
+  container.querySelector('#btn-forgot').addEventListener('click', () => {
+    if (!features.passwordReset) {
+      confirmDialog({
+        title: 'Passwort vergessen?',
+        text: 'Bitte wende dich an den Admin dieser Notizzettel-Instanz. Dort lässt sich dein Passwort zurücksetzen.',
+        ok: '',
+        cancel: 'Schließen',
+      });
+      return;
+    }
+    forgotDialog(form.elements.email.value);
+  });
+}
+
+/** Zweiter Schritt: Code aus der E-Mail */
+function renderCodeStep(container, challenge, onBack) {
+  container.innerHTML = String(html`
+    <div class="card narrow">
+      <h1 class="card-title">Code eingeben</h1>
+      <p class="card-sub">Wir haben dir einen Code an <strong>${challenge.email}</strong> geschickt. Er ist ${challenge.minutes} Minuten gültig.</p>
+      <form id="code-form" novalidate>
+        <p class="form-error" role="alert" hidden></p>
+        <label class="field">
+          <span class="field-label">6-stelliger Code</span>
+          <input class="input input-code" name="code" inputmode="numeric" autocomplete="one-time-code"
+                 pattern="[0-9 ]*" maxlength="7" placeholder="000000" required>
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Anmelden</button>
+      </form>
+      <div class="card-foot">
+        <button class="btn btn-link" type="button" id="btn-code-back"><span data-icon="back"></span>Zurück</button>
+        <button class="btn btn-link" type="button" id="btn-code-resend">Code erneut senden</button>
+      </div>
+    </div>`);
+  hydrateIcons(container);
+  const form = container.querySelector('form');
+  const input = form.elements.code;
+  input.focus();
+  bindForm(form, async (data) => {
+    try {
+      const { user } = await api('POST', '/api/login/code', { challenge: challenge.challenge, code: data.code });
+      await afterLogin(user);
+    } catch (err) {
+      if (err.data?.expired) {
+        onBack();
+        toast(err.message);
+        return;
+      }
+      input.select();
+      throw err;
+    }
+  });
+  // vollständiger Code → direkt absenden
+  input.addEventListener('input', () => {
+    if (input.value.replace(/\D/g, '').length === 6) form.requestSubmit();
+  });
+  container.querySelector('#btn-code-back').addEventListener('click', onBack);
+  container.querySelector('#btn-code-resend').addEventListener('click', async () => {
+    try {
+      await api('POST', '/api/login/code/resend', { challenge: challenge.challenge });
+      toast('Neuer Code ist unterwegs.');
+    } catch (err) {
+      if (err.data?.expired) onBack();
+      toast(err.message);
+    }
+  });
+}
+
+function forgotDialog(prefill = '') {
+  formDialog({
+    title: 'Passwort vergessen?',
+    sub: 'Gib deine E-Mail-Adresse ein. Du bekommst einen Link, mit dem du ein neues Passwort vergibst.',
+    body: html`
+      <label class="field">
+        <span class="field-label">E-Mail</span>
+        <input class="input" type="email" name="email" autocomplete="username" inputmode="email" value="${prefill}" required>
+      </label>`,
+    submit: 'Link senden',
+    onSubmit: async (data) => {
+      await api('POST', '/api/password/forgot', { email: data.email });
+      return true;
+    },
+  }).then((sent) => {
+    if (sent) toast('Falls es ein Konto mit dieser Adresse gibt, bekommst du gleich eine E-Mail.', { duration: 7000 });
+  });
+}
+
+// ---------- Einladung annehmen ----------------------------------------------
+
+const linkInvalid = (container, title, text) => {
+  container.innerHTML = String(html`
+    <div class="card narrow">
+      <h1 class="card-title">${title}</h1>
+      <p class="card-sub">${text}</p>
+      <div class="card-foot">
+        <a class="btn btn-link" href="/" data-link><span data-icon="back"></span>Zum Zettel</a>
+        <a class="btn btn-small" href="/login" data-link>Anmelden</a>
+      </div>
+    </div>`);
+  hydrateIcons(container);
+};
+
+export async function renderInvite(container, token) {
+  let inv;
+  try {
+    inv = await api('GET', `/api/invites/${encodeURIComponent(token)}`);
+  } catch (err) {
+    linkInvalid(container, 'Einladung ungültig', err.status === 404
+      ? 'Dieser Einladungslink ist abgelaufen, wurde widerrufen oder schon verwendet. Bitte frag nach einer neuen Einladung.'
+      : err.message);
+    return;
+  }
+  container.innerHTML = String(html`
+    <div class="card narrow">
+      <h1 class="card-title">Willkommen!</h1>
+      <p class="card-sub">Du wurdest zu Notizzettel eingeladen. Lege jetzt dein Konto für <strong>${inv.email}</strong> an.</p>
+      <form id="invite-form" novalidate>
+        <p class="form-error" role="alert" hidden></p>
+        <input type="email" name="username" autocomplete="username" value="${inv.email}" hidden>
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input class="input" name="name" autocomplete="name" value="${inv.name}" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Passwort</span>
+          <input class="input" type="password" name="password" autocomplete="new-password" required>
+          <span class="field-hint">${passwordHint}</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Passwort wiederholen</span>
+          <input class="input" type="password" name="password2" autocomplete="new-password" required>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="remember" checked>
+          <span>Angemeldet bleiben</span>
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Konto anlegen</button>
+      </form>
+    </div>`);
+  hydrateIcons(container);
+  bindForm(container.querySelector('form'), async (data) => {
+    if (data.password !== data.password2) throw fieldError('password2', 'Die Passwörter stimmen nicht überein.');
+    const { user } = await api('POST', `/api/invites/${encodeURIComponent(token)}`, {
+      name: data.name, password: data.password, remember: data.remember === 'on',
     });
     await afterLogin(user);
   });
-  container.querySelector('#btn-forgot').addEventListener('click', () => {
-    if (features.passwordReset) return; // folgt mit SMTP
-    confirmDialog({
-      title: 'Passwort vergessen?',
-      text: 'Bitte wende dich an den Admin dieser Notizzettel-Instanz. Dort lässt sich dein Passwort zurücksetzen.',
-      ok: 'Verstanden',
-      cancel: 'Schließen',
-    });
+}
+
+// ---------- Neues Passwort über Link ----------------------------------------
+
+export async function renderReset(container, token) {
+  let info;
+  try {
+    info = await api('GET', `/api/password/reset/${encodeURIComponent(token)}`);
+  } catch (err) {
+    linkInvalid(container, 'Link ungültig', err.status === 404
+      ? 'Dieser Link ist abgelaufen oder wurde schon verwendet. Fordere bei Bedarf einen neuen an.'
+      : err.message);
+    return;
+  }
+  container.innerHTML = String(html`
+    <div class="card narrow">
+      <h1 class="card-title">Neues Passwort</h1>
+      <p class="card-sub">Vergib ein neues Passwort für <strong>${info.email}</strong>. Danach meldest du dich überall neu an.</p>
+      <form id="reset-form" novalidate>
+        <p class="form-error" role="alert" hidden></p>
+        <input type="email" name="username" autocomplete="username" value="${info.email}" hidden>
+        <label class="field">
+          <span class="field-label">Neues Passwort</span>
+          <input class="input" type="password" name="password" autocomplete="new-password" required>
+          <span class="field-hint">${passwordHint}</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Neues Passwort wiederholen</span>
+          <input class="input" type="password" name="password2" autocomplete="new-password" required>
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Passwort speichern</button>
+      </form>
+    </div>`);
+  hydrateIcons(container);
+  bindForm(container.querySelector('form'), async (data) => {
+    if (data.password !== data.password2) throw fieldError('password2', 'Die Passwörter stimmen nicht überein.');
+    await api('POST', `/api/password/reset/${encodeURIComponent(token)}`, { password: data.password });
+    broadcastReload();
+    container.innerHTML = String(html`
+      <div class="card narrow">
+        <h1 class="card-title">Passwort gespeichert</h1>
+        <p class="card-sub">Dein neues Passwort gilt ab sofort. Alle Geräte wurden abgemeldet.</p>
+        <a class="btn btn-primary btn-block" href="/login">Jetzt anmelden</a>
+      </div>`);
   });
 }
 

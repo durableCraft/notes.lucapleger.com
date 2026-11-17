@@ -47,13 +47,14 @@ export function hideToast() {
  */
 export function confirmDialog({ title, text, ok = 'OK', cancel = 'Abbrechen', danger = false }) {
   const dlg = document.getElementById('dialog');
+  dlg.classList.remove('dialog-wide');
   dlg.innerHTML = String(html`
     <form method="dialog">
       <h2 class="card-title">${title}</h2>
       <p class="card-sub">${text}</p>
       <div class="dialog-actions">
         <button class="btn" value="cancel" type="submit">${cancel}</button>
-        <button class="btn ${danger ? 'btn-primary btn-danger-fill' : 'btn-primary'}" value="ok" type="submit">${ok}</button>
+        ${ok ? html`<button class="btn ${danger ? 'btn-danger-fill' : 'btn-primary'}" value="ok" type="submit">${ok}</button>` : ''}
       </div>
     </form>`);
   hydrateIcons(dlg);
@@ -62,6 +63,117 @@ export function confirmDialog({ title, text, ok = 'OK', cancel = 'Abbrechen', da
     dlg.returnValue = '';
     dlg.showModal();
     dlg.querySelector('[value="cancel"]').focus();
+  });
+}
+
+// ---------- Formulare ------------------------------------------------------
+
+/**
+ * Verbindet ein Formular mit einer asynchronen Aktion: Knopf sperren,
+ * Fehler im Formular anzeigen, betroffenes Feld markieren.
+ */
+export function bindForm(form, action) {
+  const errorEl = form.querySelector('.form-error');
+  const submit = form.querySelector('[type="submit"]');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (submit?.disabled) return;
+    errorEl.hidden = true;
+    form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
+    if (submit) submit.disabled = true;
+    try {
+      await action(Object.fromEntries(new FormData(form)), form);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.hidden = false;
+      const field = err.data?.field || err.field;
+      const input = field && form.elements[field];
+      if (input) {
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+      }
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
+}
+
+export function fieldError(field, message) {
+  const err = new Error(message);
+  err.field = field;
+  return err;
+}
+
+/** Text in die Zwischenablage (mit Rückfall für unsichere Verbindungen) */
+export async function copyText(text, input) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    if (input) {
+      input.focus();
+      input.select();
+      try { return document.execCommand('copy'); } catch { return false; }
+    }
+    return false;
+  }
+}
+
+/** Link-Feld mit Kopieren-Knopf (für Einladungen und Reset-Links) */
+export function linkBox(link) {
+  return html`<div class="link-box">
+    <input class="input" type="text" value="${link}" readonly aria-label="Link">
+    <button class="btn btn-small" type="button" data-copy><span data-icon="copy"></span>Kopieren</button>
+  </div>`;
+}
+
+/**
+ * Dialog mit Formular als Papierkarte.
+ * - Absenden ruft onSubmit(data, form) auf; ohne Fehler schließt der Dialog
+ *   und liefert dessen Rückgabewert (Standard: true).
+ * - Knöpfe mit data-action schließen den Dialog und liefern { action }.
+ * - Abbrechen/Escape liefert null.
+ * @returns {Promise<any>}
+ */
+export function formDialog({ title, sub = '', body = '', submit = '', cancel = 'Abbrechen', danger = false, onSubmit, wide = false }) {
+  const dlg = document.getElementById('dialog');
+  dlg.classList.toggle('dialog-wide', wide);
+  dlg.innerHTML = String(html`
+    <form novalidate>
+      <h2 class="card-title">${title}</h2>
+      ${sub ? html`<p class="card-sub">${sub}</p>` : ''}
+      <p class="form-error" role="alert" hidden></p>
+      ${html.raw(String(body))}
+      <div class="dialog-actions">
+        ${cancel ? html`<button class="btn" type="button" data-cancel>${cancel}</button>` : ''}
+        ${submit ? html`<button class="btn ${danger ? 'btn-danger-fill' : 'btn-primary'}" type="submit">${submit}</button>` : ''}
+      </div>
+    </form>`);
+  hydrateIcons(dlg);
+  const form = dlg.querySelector('form');
+  return new Promise((resolve) => {
+    let result = null;
+    bindForm(form, async (data, f) => {
+      const r = onSubmit ? await onSubmit(data, f) : true;
+      result = r === undefined ? true : r;
+      dlg.close();
+    });
+    form.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-cancel]')) dlg.close();
+      const act = e.target.closest('[data-action]');
+      if (act) {
+        result = { action: act.dataset.action };
+        dlg.close();
+      }
+      const copy = e.target.closest('[data-copy]');
+      if (copy) {
+        const input = copy.parentElement.querySelector('input');
+        if (await copyText(input.value, input)) toast('Link kopiert.');
+      }
+    });
+    dlg.addEventListener('close', () => resolve(result), { once: true });
+    dlg.showModal();
+    form.querySelector('input:not([readonly]):not([type=hidden]), select')?.focus();
   });
 }
 

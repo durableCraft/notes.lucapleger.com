@@ -10,8 +10,9 @@ import { api } from './api.js';
 import { Sync } from './sync.js';
 import {
   cachedUser, rememberUser, renderSetup, renderLogin, renderAccount, logout, TAB_ID,
-  offerLocalNotes, rescueToLocal, removeLegacyCaches,
+  offerLocalNotes, rescueToLocal, removeLegacyCaches, renderInvite, renderReset,
 } from './auth.js';
+import { renderAdmin } from './admin.js';
 
 const $ = (id) => document.getElementById(id);
 const finePointer = window.matchMedia('(pointer: fine)');
@@ -22,8 +23,23 @@ const ROUTES = {
   '/login': 'login',
   '/setup': 'setup',
   '/konto': 'account',
+  '/admin': 'admin',
 };
-const VIEWS = ['editor', 'trash', 'login', 'setup', 'account'];
+const VIEWS = ['editor', 'trash', 'login', 'setup', 'account', 'admin', 'invite', 'reset'];
+const CARD_TITLES = {
+  trash: 'Papierkorb', login: 'Anmelden', setup: 'Einrichtung', account: 'Mein Konto',
+  admin: 'Verwaltung', invite: 'Einladung', reset: 'Neues Passwort',
+};
+
+/** Pfad → Ansicht (inkl. Links mit Token) */
+function resolveRoute(path) {
+  if (ROUTES[path]) return { view: ROUTES[path] };
+  let m = path.match(/^\/einladung\/([A-Za-z0-9_-]+)$/);
+  if (m) return { view: 'invite', token: m[1] };
+  m = path.match(/^\/passwort\/([A-Za-z0-9_-]+)$/);
+  if (m) return { view: 'reset', token: m[1] };
+  return null;
+}
 
 const state = {
   /** @type {NoteStore} */ store: null,
@@ -246,6 +262,7 @@ function updateAccountLink() {
   const link = $('account-link');
   link.setAttribute('href', state.user ? '/konto' : '/login');
   $('account-label').textContent = state.user ? state.user.name : 'Anmelden';
+  $('admin-link').hidden = state.user?.role !== 'admin';
 }
 
 function updateToolbar() {
@@ -285,15 +302,16 @@ function navigate(path, { replace = false } = {}) {
 }
 
 async function render() {
-  const path = location.pathname;
-  let view = ROUTES[path];
-  if (!view) {
+  let route = resolveRoute(location.pathname);
+  if (!route) {
     history.replaceState(null, '', '/');
-    view = 'editor';
+    route = { view: 'editor' };
   }
+  const { view } = route;
   // Weiterleitungen je nach Anmeldestatus
   if (view === 'login' && state.user && !state.sessionExpired) return navigate('/konto', { replace: true });
-  if (view === 'account' && !state.user) return navigate('/login', { replace: true });
+  if ((view === 'account' || view === 'admin') && !state.user) return navigate('/login', { replace: true });
+  if (view === 'admin' && state.user.role !== 'admin') return navigate('/', { replace: true });
 
   const prev = state.view;
   state.view = view;
@@ -301,29 +319,31 @@ async function render() {
   for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
   $('trash-link').setAttribute('aria-current', view === 'trash' ? 'page' : 'false');
   $('account-link').setAttribute('aria-current', ['login', 'account', 'setup'].includes(view) ? 'page' : 'false');
+  $('admin-link').setAttribute('aria-current', view === 'admin' ? 'page' : 'false');
   state.drawer?.hide();
   if (prev === 'editor' && view !== 'editor') await saveNow();
 
   const status = state.status ?? { setupRequired: false, user: state.user, features: {} };
   if (view === 'trash') {
     renderTrash($('view-trash'), await state.store.trash());
-    document.title = 'Papierkorb – Notizzettel';
   } else if (view === 'login') {
     renderLogin($('view-login'), status, { expired: state.sessionExpired });
-    document.title = 'Anmelden – Notizzettel';
   } else if (view === 'setup') {
     renderSetup($('view-setup'), status);
-    document.title = 'Einrichtung – Notizzettel';
   } else if (view === 'account') {
     renderAccount($('view-account'), state.user, {
       onLogout: () => logout({ store: state.store, sync: state.sync }),
     });
-    document.title = 'Mein Konto – Notizzettel';
-  } else {
-    document.title = 'Notizzettel';
+  } else if (view === 'admin') {
+    await renderAdmin($('view-admin'), state.user);
+  } else if (view === 'invite') {
+    await renderInvite($('view-invite'), route.token);
+  } else if (view === 'reset') {
+    await renderReset($('view-reset'), route.token);
   }
+  document.title = CARD_TITLES[view] ? `${CARD_TITLES[view]} – Notizzettel` : 'Notizzettel';
   // Fokus auf das erste Eingabefeld von Karten (nur mit Maus/Tastatur)
-  if (view !== 'editor' && view !== 'trash' && finePointer.matches) {
+  if (['login', 'setup', 'invite', 'reset'].includes(view) && finePointer.matches) {
     $(`view-${view}`).querySelector('input:not([type=hidden]):not([type=checkbox])')?.focus();
   }
 }
