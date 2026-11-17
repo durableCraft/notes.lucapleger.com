@@ -44,10 +44,12 @@
         <div class="status" id="status" role="status" aria-live="polite"></div>
         <div class="spacer"></div>
         <div class="fmt" id="fmt" role="toolbar" aria-label="Formatierung">
-          <button class="fmt-btn" type="button" data-cmd="bold" aria-label="Fett (Strg+B)" title="Fett (Strg+B)" aria-pressed="false"><b>B</b></button>
-          <button class="fmt-btn" type="button" data-cmd="italic" aria-label="Kursiv (Strg+I)" title="Kursiv (Strg+I)" aria-pressed="false"><i>I</i></button>
-          <button class="fmt-btn" type="button" data-cmd="underline" aria-label="Unterstrichen (Strg+U)" title="Unterstrichen (Strg+U)" aria-pressed="false"><u>U</u></button>
-          <button class="fmt-btn fmt-done" type="button" id="btn-done" aria-label="Tastatur schließen" title="Fertig"><span data-icon="chevronDown"></span></button>
+          <div class="segmented glass">
+            <button class="fmt-btn" type="button" data-cmd="bold" aria-label="Fett (Strg+B)" title="Fett (Strg+B)" aria-pressed="false"><b>B</b></button>
+            <button class="fmt-btn" type="button" data-cmd="italic" aria-label="Kursiv (Strg+I)" title="Kursiv (Strg+I)" aria-pressed="false"><i>I</i></button>
+            <button class="fmt-btn" type="button" data-cmd="underline" aria-label="Unterstrichen (Strg+U)" title="Unterstrichen (Strg+U)" aria-pressed="false"><u>U</u></button>
+          </div>
+          <button class="fmt-btn fmt-done glass" type="button" id="btn-done" aria-label="Tastatur schließen" title="Fertig"><span data-icon="chevronDown"></span></button>
         </div>
         <span class="divider editor-only" aria-hidden="true"></span>
         <button class="icon-btn" id="btn-new" type="button" aria-label="Neuer Zettel" title="Neuer Zettel">
