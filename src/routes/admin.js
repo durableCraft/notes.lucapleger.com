@@ -60,6 +60,7 @@ function userJson(u) {
     createdAt: u.created_at,
     lastLoginAt: u.last_login_at,
     sessions: u.sessions ?? 0,
+    passkeys: u.passkeys ?? 0,
   };
 }
 
@@ -92,7 +93,8 @@ async function trySend(to, mail) {
 
 adminRoutes.get('/admin/users', (req, res) => {
   const users = all(`
-    SELECT u.*, (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?) AS sessions
+    SELECT u.*, (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?) AS sessions,
+           (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys
       FROM users u ORDER BY u.name COLLATE NOCASE, u.email`, Date.now());
   res.json({
     users: users.map(userJson),

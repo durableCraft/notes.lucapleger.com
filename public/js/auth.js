@@ -4,6 +4,10 @@ import { api } from './api.js';
 import { html } from './util.js';
 import { hydrateIcons } from './icons.js';
 import { confirmDialog, toast, bindForm, fieldError, formDialog } from './ui.js';
+import {
+  passkeysSupported, conditionalSupported, loginWithPasskey, registerPasskey,
+  passkeyErrorMessage, suggestPasskeyName,
+} from './webauthn.js';
 import { NoteStore, LOCAL_DB, LEGACY_PREFIX } from './store.js';
 
 const USER_KEY = 'notizzettel.user';
@@ -121,7 +125,7 @@ export function renderLogin(container, status, { expired = false } = {}) {
         </label>
         <button class="btn btn-primary btn-block" type="submit">Anmelden</button>
       </form>
-      ${features.passkeys ? html`
+      ${features.passkeys && passkeysSupported() ? html`
         <div class="sep">oder</div>
         <button class="btn btn-block" type="button" id="btn-passkey"><span data-icon="key"></span>Mit Passkey anmelden</button>` : ''}
       <div class="card-foot">
@@ -131,7 +135,44 @@ export function renderLogin(container, status, { expired = false } = {}) {
     </div>`);
   hydrateIcons(container);
   const form = container.querySelector('form');
+  const errorEl = form.querySelector('.form-error');
+  const showError = (msg) => {
+    errorEl.textContent = msg;
+    errorEl.hidden = false;
+  };
+
+  // Passkey: im Autofill des E-Mail-Felds anbieten (falls der Browser das kann)
+  stopConditionalLogin();
+  if (features.passkeys) {
+    conditionalSupported().then((ok) => {
+      if (!ok || !container.isConnected) return;
+      conditionalCtl = new AbortController();
+      loginWithPasskey({ conditional: true, signal: conditionalCtl.signal, remember: form.elements.remember.checked })
+        .then(({ user }) => afterLogin(user))
+        .catch((err) => {
+          const msg = passkeyErrorMessage(err);
+          if (msg && err.name !== 'AbortError') showError(msg);
+        });
+    });
+  }
+  container.querySelector('#btn-passkey')?.addEventListener('click', async (e) => {
+    stopConditionalLogin();
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    errorEl.hidden = true;
+    try {
+      const { user } = await loginWithPasskey({ remember: form.elements.remember.checked });
+      await afterLogin(user);
+    } catch (err) {
+      const msg = passkeyErrorMessage(err);
+      if (msg) showError(msg);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   bindForm(form, async (data) => {
+    stopConditionalLogin();
     const r = await api('POST', '/api/login', {
       email: data.email, password: data.password, remember: data.remember === 'on',
     });
@@ -153,6 +194,13 @@ export function renderLogin(container, status, { expired = false } = {}) {
     }
     forgotDialog(form.elements.email.value);
   });
+}
+
+let conditionalCtl = null;
+/** Laufende Passkey-Abfrage im Autofill beenden (z. B. beim Verlassen der Seite) */
+export function stopConditionalLogin() {
+  conditionalCtl?.abort();
+  conditionalCtl = null;
 }
 
 /** Zweiter Schritt: Code aus der E-Mail */
@@ -355,6 +403,16 @@ export function renderAccount(container, user, { onLogout }) {
       </section>
 
       <section class="card-section">
+        <h2 class="section-title">Passkeys</h2>
+        <p class="section-intro">Mit einem Passkey meldest du dich ohne Passwort an – per Fingerabdruck,
+          Gesicht oder Geräte-PIN. Ein Code per E-Mail ist dann nicht nötig.</p>
+        <div id="passkey-list"><p class="loading">Lädt …</p></div>
+        ${passkeysSupported() ? html`
+          <button class="btn btn-small" type="button" id="btn-add-passkey"><span data-icon="key"></span>Passkey hinzufügen</button>`
+    : html`<p class="note">Dieser Browser kann hier keine Passkeys anlegen. Passkeys brauchen eine sichere Verbindung (HTTPS).</p>`}
+      </section>
+
+      <section class="card-section">
         <h2 class="section-title">Passwort ändern</h2>
         <form id="password-form" novalidate>
           <p class="form-error" role="alert" hidden></p>
@@ -398,6 +456,7 @@ export function renderAccount(container, user, { onLogout }) {
     toast('Passwort geändert.');
   });
   container.querySelector('#btn-logout').addEventListener('click', onLogout);
+  setupPasskeys(container);
 }
 
 // ---------- nach der Anmeldung ----------------------------------------------
@@ -517,4 +576,91 @@ export async function logout({ store, sync }) {
   clearCachedUser();
   broadcastReload();
   location.assign('/');
+}
+
+// ---------- Passkeys verwalten (Mein Konto) ---------------------------------
+
+const fmtDate = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+async function setupPasskeys(container) {
+  const list = container.querySelector('#passkey-list');
+  const load = async () => {
+    let passkeys;
+    try {
+      ({ passkeys } = await api('GET', '/api/passkeys'));
+    } catch (err) {
+      list.innerHTML = String(html`<p class="form-error">${err.message}</p>`);
+      return;
+    }
+    list.innerHTML = String(passkeys.length ? html`
+      <ul class="row-list passkey-list">
+        ${passkeys.map((p) => html`
+          <li class="row is-static">
+            <span class="avatar" aria-hidden="true"><span data-icon="key"></span></span>
+            <span class="row-main">
+              <span class="row-title">${p.name}</span>
+              <span class="row-sub">hinzugefügt ${fmtDate.format(p.createdAt)}${p.lastUsedAt ? ` · zuletzt genutzt ${fmtDate.format(p.lastUsedAt)}` : ''}</span>
+            </span>
+            ${p.synced ? html`<span class="row-badges"><span class="badge" title="Wird über deine Geräte synchronisiert (z. B. iCloud-Schlüsselbund)">synchronisiert</span></span>` : ''}
+            <span class="row-actions">
+              <button class="btn btn-small btn-icon" type="button" data-rename="${p.id}" data-name="${p.name}" aria-label="${p.name} umbenennen" title="Umbenennen"><span data-icon="pencil"></span></button>
+              <button class="btn btn-small btn-icon" type="button" data-remove="${p.id}" data-name="${p.name}" aria-label="${p.name} entfernen" title="Entfernen"><span data-icon="trash"></span></button>
+            </span>
+          </li>`)}
+      </ul>` : html`<p class="trash-empty">Noch kein Passkey eingerichtet.</p>`);
+    hydrateIcons(list);
+  };
+  await load();
+
+  list.addEventListener('click', async (e) => {
+    const ren = e.target.closest('[data-rename]');
+    const rem = e.target.closest('[data-remove]');
+    if (ren) {
+      const ok = await formDialog({
+        title: 'Passkey umbenennen',
+        body: html`<label class="field"><span class="field-label">Name</span>
+          <input class="input" name="name" value="${ren.dataset.name}" maxlength="60" required></label>`,
+        submit: 'Speichern',
+        onSubmit: (d) => api('PATCH', `/api/passkeys/${encodeURIComponent(ren.dataset.rename)}`, { name: d.name }),
+      });
+      if (ok) load();
+    } else if (rem) {
+      const ok = await confirmDialog({
+        title: 'Passkey entfernen?',
+        text: `Mit „${rem.dataset.name}“ kannst du dich danach nicht mehr anmelden. Lösche ihn zusätzlich in der Passwort-App deines Geräts, damit er dort nicht mehr angeboten wird.`,
+        ok: 'Entfernen',
+        danger: true,
+      });
+      if (!ok) return;
+      try {
+        await api('DELETE', `/api/passkeys/${encodeURIComponent(rem.dataset.remove)}`);
+        toast('Passkey entfernt.');
+        load();
+      } catch (err) { toast(err.message); }
+    }
+  });
+
+  container.querySelector('#btn-add-passkey')?.addEventListener('click', async () => {
+    const added = await formDialog({
+      title: 'Passkey hinzufügen',
+      sub: 'Gib dem Passkey einen Namen, an dem du das Gerät erkennst. Danach fragt dein Gerät nach Fingerabdruck, Gesicht oder PIN.',
+      body: html`<label class="field"><span class="field-label">Name</span>
+        <input class="input" name="name" value="${suggestPasskeyName()}" maxlength="60" required></label>`,
+      submit: 'Weiter',
+      onSubmit: async (d) => {
+        try {
+          await registerPasskey(d.name);
+          return true;
+        } catch (err) {
+          const msg = passkeyErrorMessage(err);
+          if (msg === null) return false;   // abgebrochen
+          throw new Error(msg);
+        }
+      },
+    });
+    if (added) {
+      toast('Passkey gespeichert. Du kannst dich jetzt damit anmelden.');
+      load();
+    }
+  });
 }

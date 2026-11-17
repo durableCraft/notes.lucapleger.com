@@ -29,6 +29,7 @@ export const icons = {
   mail: `<svg ${a}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>`,
   userPlus: `<svg ${a}><circle cx="10" cy="8" r="4"/><path d="M3 20c1.4-3.4 4-5 7-5s5.6 1.6 7 5M19 8v6M16 11h6"/></svg>`,
   chevronRight: `<svg ${a}><path d="M9 6l6 6-6 6"/></svg>`,
+  pencil: `<svg ${a}><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>`,
   warning: `<svg ${a}><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
 };
 

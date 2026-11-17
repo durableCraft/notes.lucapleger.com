@@ -10,7 +10,7 @@ import { api } from './api.js';
 import { Sync } from './sync.js';
 import {
   cachedUser, rememberUser, renderSetup, renderLogin, renderAccount, logout, TAB_ID,
-  offerLocalNotes, rescueToLocal, removeLegacyCaches, renderInvite, renderReset,
+  offerLocalNotes, rescueToLocal, removeLegacyCaches, renderInvite, renderReset, stopConditionalLogin,
 } from './auth.js';
 import { renderAdmin } from './admin.js';
 
@@ -315,6 +315,7 @@ async function render() {
 
   const prev = state.view;
   state.view = view;
+  if (view !== 'login') stopConditionalLogin();
   document.body.dataset.view = view;
   for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
   $('trash-link').setAttribute('aria-current', view === 'trash' ? 'page' : 'false');

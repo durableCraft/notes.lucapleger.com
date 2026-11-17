@@ -79,6 +79,23 @@ const migrations = [
   );
   CREATE INDEX tokens_kind ON tokens(kind, expires_at);
   `,
+  // 3: Passkeys (WebAuthn)
+  `
+  ALTER TABLE users ADD COLUMN webauthn_id TEXT;
+  CREATE TABLE passkeys (
+    id            TEXT    PRIMARY KEY,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    public_key    BLOB    NOT NULL,
+    counter       INTEGER NOT NULL DEFAULT 0,
+    transports    TEXT,
+    device_type   TEXT,
+    backed_up     INTEGER NOT NULL DEFAULT 0,
+    name          TEXT    NOT NULL,
+    created_at    INTEGER NOT NULL,
+    last_used_at  INTEGER
+  );
+  CREATE INDEX passkeys_user ON passkeys(user_id);
+  `,
 ];
 
 let db = null;

@@ -33,7 +33,7 @@ authRoutes.get('/status', (req, res) => {
     user: req.user,
     features: {
       passwordReset: smtpTested(),
-      passkeys: false, // folgt in Schritt 4
+      passkeys: true,
     },
   });
 });

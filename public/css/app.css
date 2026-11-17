@@ -1217,3 +1217,12 @@ select.input {
 .tab, .toast-action { display: inline-flex; align-items: center; justify-content: center; }
 .toast-action { min-height: 32px; }
 .count { display: inline-flex; align-items: center; justify-content: center; height: 20px; }
+
+/* Passkeys in "Mein Konto" */
+.passkey-list { margin-bottom: 14px; }
+#passkey-list .trash-empty { margin: 0 0 14px; }
+@media (max-width: 559px) {
+  .passkey-list .row.is-static { flex-wrap: nowrap; }
+  .passkey-list .row.is-static .row-main { flex-basis: auto; }
+  .passkey-list .row-badges { display: none; }
+}
