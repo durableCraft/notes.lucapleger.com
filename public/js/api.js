@@ -15,7 +15,7 @@ export class ApiError extends Error {
   get offline() { return this.status === 0; }
 }
 
-export async function api(method, path, body, { timeout = 15000 } = {}) {
+export async function api(method, path, body, { timeout = 15000, keepalive = false } = {}) {
   let res;
   try {
     res = await fetch(path, {
@@ -26,7 +26,8 @@ export async function api(method, path, body, { timeout = 15000 } = {}) {
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(timeout),
+      signal: keepalive ? undefined : AbortSignal.timeout(timeout),
+      keepalive,
     });
   } catch {
     throw new ApiError(0, 'Keine Verbindung zum Server. Bist du online?');

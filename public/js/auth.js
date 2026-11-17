@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { html } from './util.js';
 import { hydrateIcons } from './icons.js';
 import { confirmDialog, toast } from './ui.js';
-import { NoteStore, LOCAL_DB, userDbName } from './store.js';
+import { NoteStore, LOCAL_DB, LEGACY_PREFIX } from './store.js';
 
 const USER_KEY = 'notizzettel.user';
 
@@ -252,28 +252,25 @@ export function renderAccount(container, user, { onLogout }) {
 
 // ---------- nach der Anmeldung ----------------------------------------------
 
-/** Lokale Zettel übernehmen bzw. verwerfen, dann App im Konto-Modus neu starten. */
+/** App im Konto-Modus neu starten. Lokale Zettel werden danach angeboten. */
 export async function afterLogin(user) {
-  const previous = cachedUser();
   setCachedUser(user);
-
-  // Zwischenspeicher eines anderen Kontos aufräumen (nur ohne offene Änderungen)
-  if (previous && previous.id !== user.id) {
-    const old = await new NoteStore(userDbName(previous.id), { synced: true }).open();
-    if ((await old.dirty()).length === 0) await old.destroy(); else old.db.close();
-  }
-
-  await transferLocalNotes(user);
   broadcastReload();
   location.assign('/');
 }
 
-async function transferLocalNotes(user) {
+/**
+ * Im Konto-Modus: Zettel, die ohne Anmeldung auf diesem Gerät liegen, anbieten.
+ * Übernommene Zettel werden direkt auf den Server geladen. Der lokale Speicher
+ * wird erst gelöscht, wenn das geklappt hat (sonst beim nächsten Start erneut).
+ * @returns {Promise<number>} Anzahl übernommener Zettel
+ */
+export async function offerLocalNotes() {
   const local = await new NoteStore(LOCAL_DB).open();
   const notes = (await local.all()).filter((n) => !n.purged);
   if (!notes.length) {
     local.db.close();
-    return;
+    return 0;
   }
   const active = notes.filter((n) => !n.deletedAt).length;
   let take = true;
@@ -299,27 +296,58 @@ async function transferLocalNotes(user) {
   }
   if (take) {
     // auch der Papierkorb wird mitgenommen
-    const target = await new NoteStore(userDbName(user.id), { synced: true }).open();
-    await target.importNotes(notes);
-    target.db.close();
+    try {
+      for (const n of notes) {
+        try {
+          await api('PUT', `/api/notes/${n.id}`, {
+            html: n.html, createdAt: n.createdAt, updatedAt: n.updatedAt, deletedAt: n.deletedAt,
+          });
+        } catch (err) {
+          if (err.status !== 400 && err.status !== 413) throw err;
+          console.warn(`Zettel ${n.id} wurde vom Server abgelehnt: ${err.message}`);
+        }
+      }
+    } catch (err) {
+      local.db.close();
+      throw err;
+    }
   }
   await local.destroy();
+  return take ? notes.length : 0;
+}
+
+/**
+ * Sitzung abgelaufen, aber noch nicht gespeicherte Änderungen im Arbeitsspeicher:
+ * Diese werden ohne Konto auf dem Gerät abgelegt und nach der nächsten
+ * Anmeldung zur Übernahme angeboten.
+ */
+export async function rescueToLocal(notes) {
+  const keep = notes.filter((n) => !n.purged);
+  if (!keep.length) return 0;
+  const local = await new NoteStore(LOCAL_DB).open();
+  await local.importNotes(keep);
+  local.db.close();
+  return keep.length;
+}
+
+/** Zwischenspeicher früherer Versionen (Zettel des Kontos auf dem Gerät) entfernen */
+export async function removeLegacyCaches() {
+  try {
+    const dbs = await indexedDB.databases?.();
+    for (const d of dbs || []) {
+      if (d.name?.startsWith(LEGACY_PREFIX)) indexedDB.deleteDatabase(d.name);
+    }
+  } catch { /* nicht unterstützt */ }
 }
 
 // ---------- Abmelden --------------------------------------------------------
 
 export async function logout({ store, sync }) {
-  if (sync) {
-    await sync.run();
-    if (sync.state === 'offline') {
-      toast('Zum Abmelden brauchst du eine Verbindung zum Server.');
-      return;
-    }
-  }
+  if (sync) await sync.run();
   const pending = store ? (await store.dirty()).length : 0;
   if (pending) {
     const ok = await confirmDialog({
-      title: 'Nicht abgeglichene Änderungen',
+      title: 'Nicht gespeicherte Änderungen',
       text: `${pending === 1 ? '1 Änderung ist' : `${pending} Änderungen sind`} noch nicht auf dem Server und ${pending === 1 ? 'geht' : 'gehen'} beim Abmelden verloren.`,
       ok: 'Trotzdem abmelden',
       danger: true,
@@ -335,8 +363,7 @@ export async function logout({ store, sync }) {
     }
   }
   sync?.stop();
-  // Zwischenspeicher dieses Kontos vom Gerät entfernen
-  await store?.destroy();
+  store?.clearDirty?.();
   clearCachedUser();
   broadcastReload();
   location.assign('/');

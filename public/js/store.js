@@ -5,16 +5,18 @@
 //              Server es bestätigt hat
 //   dirty      lokal geändert, noch nicht mit dem Server abgeglichen
 //
-// Ohne Anmeldung: eine Datenbank "notizzettel-lokal".
-// Mit Anmeldung:  je Konto eine eigene Datenbank als Zwischenspeicher (synced = true).
+// Ohne Anmeldung: IndexedDB "notizzettel-lokal" auf dem Gerät.
+// Mit Anmeldung:  nur im Arbeitsspeicher (memory = true) – die Zettel liegen auf
+//                 dem Server und werden im Hintergrund abgeglichen (synced = true).
 
-import { openDB, deleteDB } from './idb.js';
+import { openDB, deleteDB, memoryDB } from './idb.js';
 import { titleOf } from './sanitize.js';
 import { DAY } from './util.js';
 
 export const TRASH_DAYS = 30;
 export const LOCAL_DB = 'notizzettel-lokal';
-export const userDbName = (userId) => `notizzettel-konto-${userId}`;
+/** Frühere Versionen legten je Konto einen Zwischenspeicher an */
+export const LEGACY_PREFIX = 'notizzettel-konto-';
 
 const NOTES = 'notes';
 const META = 'meta';
@@ -25,16 +27,23 @@ const isTrashed = (n) => !!n.deletedAt && !n.purged;
 export class NoteStore extends EventTarget {
   /**
    * @param {string} dbName
-   * @param {{ synced?: boolean }} [opts]  synced: Konto-Modus mit Server-Abgleich
+   * @param {{ synced?: boolean, memory?: boolean }} [opts]
+   *   synced: Konto-Modus mit Server-Abgleich (endgültiges Löschen als Grabstein)
+   *   memory: nichts auf dem Gerät speichern
    */
-  constructor(dbName, { synced = false } = {}) {
+  constructor(dbName, { synced = false, memory = false } = {}) {
     super();
     this.dbName = dbName;
     this.synced = synced;
+    this.memory = memory;
     this.db = null;
   }
 
   async open() {
+    if (this.memory) {
+      this.db = memoryDB([NOTES, META]);
+      return this;
+    }
     this.db = await openDB(this.dbName, 1, (db) => {
       if (!db.objectStoreNames.contains(NOTES)) db.createObjectStore(NOTES, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
@@ -195,12 +204,17 @@ export class NoteStore extends EventTarget {
     return count;
   }
 
+  /** Offene Änderungen verwerfen (z. B. beim Abmelden) */
+  async clearDirty() {
+    for (const n of await this.dirty()) await this.db.delete(NOTES, n.id);
+  }
+
   async getMeta(key) { return this.db.get(META, key); }
   async setMeta(key, value) { return this.db.put(META, value, key); }
 
   async destroy() {
     this.db?.close();
-    await deleteDB(this.dbName);
+    if (!this.memory) await deleteDB(this.dbName);
   }
 }
 

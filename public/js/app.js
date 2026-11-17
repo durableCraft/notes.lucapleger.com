@@ -2,7 +2,7 @@
 
 import { hydrateIcons } from './icons.js';
 import { uuid, debounce, longDate, html } from './util.js';
-import { NoteStore, LOCAL_DB, userDbName } from './store.js';
+import { NoteStore, LOCAL_DB } from './store.js';
 import { Editor } from './editor.js';
 import { toast, confirmDialog, Drawer, trackKeyboard } from './ui.js';
 import { renderHistory, renderTrash } from './views.js';
@@ -10,6 +10,7 @@ import { api } from './api.js';
 import { Sync } from './sync.js';
 import {
   cachedUser, rememberUser, renderSetup, renderLogin, renderAccount, logout, TAB_ID,
+  offerLocalNotes, rescueToLocal, removeLegacyCaches,
 } from './auth.js';
 
 const $ = (id) => document.getElementById(id);
@@ -34,7 +35,7 @@ const state = {
   channel: null,
   /** Antwort von /api/status (null = Server nicht erreichbar) */
   status: null,
-  /** angemeldeter Benutzer (auch offline: zuletzt bekannter) */
+  /** angemeldeter Benutzer (Zettel liegen dann nur auf dem Server) */
   user: null,
   sessionExpired: false,
   /** @type {Sync|null} */ sync: null,
@@ -78,7 +79,8 @@ async function doSave({ cur, content, empty }) {
   cur.createdAt = note.createdAt;
   state.channel?.postMessage('change');
   if (cur === state.current) {
-    setStatus('saved');
+    // Mit Konto meldet erst der Server "Gespeichert" (Ereignis 'pushed')
+    if (!state.user) setStatus('saved');
     updateToolbar();
     maybeShowHomescreenHint();
   }
@@ -206,9 +208,7 @@ function setStatus(kind) {
   clearTimeout(statusTimer);
   if (kind === 'saved') {
     el.innerHTML = String(html`<span data-icon="check"></span><span>Gespeichert</span>`);
-    el.title = !state.user ? 'Auf diesem Gerät gespeichert'
-      : state.sync?.state === 'offline' ? 'Auf diesem Gerät gespeichert – wird übertragen, sobald du online bist'
-        : 'Gespeichert und mit deinem Konto abgeglichen';
+    el.title = state.user ? 'Auf dem Server gespeichert' : 'Auf diesem Gerät gespeichert';
     hydrateIcons(el);
     el.classList.add('is-visible');
     statusTimer = setTimeout(() => el.classList.remove('is-visible'), 2500);
@@ -230,9 +230,10 @@ function setSyncBadge(kind) {
     return;
   }
   const map = {
-    offline: ['cloudOff', 'Offline', 'Keine Verbindung – Änderungen werden übertragen, sobald du wieder online bist.'],
-    error: ['warning', 'Abgleich gestört', 'Der Abgleich mit dem Server ist fehlgeschlagen. Es wird regelmäßig erneut versucht.'],
-    auth: ['cloudOff', 'Abgemeldet', 'Deine Sitzung ist abgelaufen. Melde dich an, um weiter abzugleichen.'],
+    offline: ['cloudOff', 'Offline', 'Keine Verbindung zum Server.'],
+    unsaved: ['cloudOff', 'Nicht gespeichert', 'Keine Verbindung zum Server. Deine Änderungen werden übertragen, sobald die Verbindung wieder da ist – schließe die Seite bis dahin nicht.'],
+    error: ['warning', 'Nicht gespeichert', 'Der Server hat einen Fehler gemeldet. Es wird regelmäßig erneut versucht – schließe die Seite bis dahin nicht.'],
+    auth: ['cloudOff', 'Abgemeldet', 'Deine Sitzung ist abgelaufen. Melde dich an, um weiterzuschreiben.'],
   };
   const [icon, label, title] = map[kind];
   el.innerHTML = String(html`<span data-icon="${icon}"></span><span>${label}</span>`);
@@ -368,14 +369,15 @@ async function maybeShowHomescreenHint() {
 
 // ---------- Start -----------------------------------------------------------
 
-/** Fragt den Server nach Einrichtung und Anmeldung. Offline: zuletzt bekannter Benutzer. */
+/** Fragt den Server nach Einrichtung und Anmeldung. */
 async function loadStatus() {
   const cached = cachedUser();
   try {
-    state.status = await api('GET', '/api/status', undefined, { timeout: 6000 });
+    state.status = await api('GET', '/api/status', undefined, { timeout: 8000 });
   } catch {
+    // Server nicht erreichbar: vorerst ohne Konto (lokal) weiterschreiben
     state.status = null;
-    state.user = cached;
+    state.user = null;
     return;
   }
   state.user = state.status.user;
@@ -386,8 +388,10 @@ async function loadStatus() {
 async function main() {
   hydrateIcons();
   await loadStatus();
+  removeLegacyCaches();
+  // Mit Konto: nichts auf dem Gerät speichern, nur im Arbeitsspeicher halten
   state.store = state.user
-    ? await new NoteStore(userDbName(state.user.id), { synced: true }).open()
+    ? await new NoteStore('konto', { synced: true, memory: true }).open()
     : await new NoteStore(LOCAL_DB).open();
   await state.store.purgeExpired();
   if (state.status?.setupRequired && location.pathname === '/') history.replaceState(null, '', '/setup');
@@ -492,30 +496,55 @@ async function main() {
   if (state.user) {
     const sync = new Sync(state.store);
     state.sync = sync;
-    sync.addEventListener('state', (e) => {
-      const s = e.detail;
-      if (s === 'ok') setSyncBadge(null);
-      else if (s === 'offline' || s === 'error') setSyncBadge(s);
-      else if (s === 'auth') {
-        setSyncBadge('auth');
-        state.sessionExpired = true;
-        toast('Deine Sitzung ist abgelaufen.', { action: 'Anmelden', onAction: () => navigate('/login') });
-      }
+    const updateBadge = () => {
+      const s = sync.state;
+      if (s === 'ok' || s === 'syncing' || s === 'idle') setSyncBadge(null);
+      else if (s === 'offline') setSyncBadge(sync.pending ? 'unsaved' : 'offline');
+      else setSyncBadge(s);
+    };
+    sync.addEventListener('state', updateBadge);
+    sync.addEventListener('pushed', () => {
+      updateBadge();
+      if (!sync.pending) setStatus('saved');
     });
     sync.addEventListener('remote', (e) => onRemoteChange(e.detail.ids));
-    sync.start();
+    // Sitzung abgelaufen: offene Änderungen ohne Konto auf dem Gerät sichern,
+    // nach der nächsten Anmeldung werden sie zur Übernahme angeboten.
+    sync.addEventListener('unauthorized', async () => {
+      const first = !state.sessionExpired;
+      state.sessionExpired = true;
+      const rescued = await rescueToLocal(await state.store.dirty());
+      if (first) {
+        toast(rescued
+          ? 'Deine Sitzung ist abgelaufen. Deine letzten Änderungen sind auf diesem Gerät gesichert – nach der Anmeldung kannst du sie übernehmen.'
+          : 'Deine Sitzung ist abgelaufen.', { duration: 10000 });
+        navigate('/login');
+      }
+    });
+    await sync.start();
   } else if (state.sessionExpired) {
     toast('Deine Sitzung ist abgelaufen. Deine Zettel bleiben erhalten.', {
       action: 'Anmelden', onAction: () => navigate('/login'), duration: 10000,
     });
   }
 
-  // Beim Verlassen sofort speichern
+  // Beim Verlassen sofort speichern (mit Konto: direkt an den Server)
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveNow();
+    if (document.visibilityState === 'hidden') saveNow().then(() => state.sync?.run());
     else refreshSidebar();
   });
-  window.addEventListener('pagehide', () => saveNow());
+  window.addEventListener('pagehide', () => {
+    saveNow().then(() => state.sync?.flush());
+  });
+  // Warnen, wenn Änderungen den Server nicht erreichen konnten
+  window.addEventListener('beforeunload', (e) => {
+    const sync = state.sync;
+    if (!sync || ['ok', 'syncing', 'idle'].includes(sync.state)) return;
+    if (sync.pending || saveSoon.pending()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   // Strg/⌘+Alt+N: neuer Zettel
   document.addEventListener('keydown', (e) => {
@@ -528,11 +557,25 @@ async function main() {
   await render();
   await openFresh({ focus: state.view === 'editor' });
 
-  // Browser um dauerhaften Speicher bitten (Chrome/Firefox; Safari ignoriert es)
-  navigator.storage?.persist?.().catch(() => {});
-
-  if (!state.store.persistent) {
-    toast('Speichern auf diesem Gerät ist nicht möglich (privater Modus?). Zettel gehen beim Schließen verloren.', { duration: 10000 });
+  if (state.user) {
+    // Zettel, die ohne Anmeldung auf diesem Gerät liegen, ins Konto übernehmen?
+    try {
+      const taken = await offerLocalNotes();
+      if (taken) {
+        await state.sync.run();
+        toast(taken === 1 ? '1 Zettel übernommen.' : `${taken} Zettel übernommen.`);
+      }
+    } catch {
+      toast('Die Zettel auf diesem Gerät konnten nicht übernommen werden. Sie bleiben erhalten und werden beim nächsten Start erneut angeboten.', { duration: 10000 });
+    }
+  } else {
+    // Browser um dauerhaften Speicher bitten (Chrome/Firefox; Safari ignoriert es)
+    navigator.storage?.persist?.().catch(() => {});
+    if (!state.store.persistent) {
+      toast('Speichern auf diesem Gerät ist nicht möglich (privater Modus?). Zettel gehen beim Schließen verloren.', { duration: 10000 });
+    } else if (!state.status) {
+      toast('Der Server ist gerade nicht erreichbar. Deine Zettel werden vorerst nur auf diesem Gerät gespeichert.', { duration: 10000 });
+    }
   }
 }
 

@@ -39,7 +39,7 @@ function wrap(db) {
   };
 }
 
-function memoryDB(storeNames) {
+export function memoryDB(storeNames) {
   const stores = Object.fromEntries(storeNames.map((n) => [n, new Map()]));
   const keyOf = (v) => v.id;
   const clone = (v) => (v === undefined ? v : structuredClone(v));
