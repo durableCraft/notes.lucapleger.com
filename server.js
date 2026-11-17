@@ -1,41 +1,21 @@
-// Notizzettel – Server
-// Schritt 1: statische Auslieferung des Frontend-Prototyps.
-import express from 'express';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Notizzettel – Einstiegspunkt. Start: node server.js
 
-const root = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.join(root, 'public');
+// node:sqlite meldet unter Node 22 bei jedem Start eine ExperimentalWarning.
+// Nur diese eine Warnung wird ausgeblendet, damit das Journal sauber bleibt.
+const emitWarning = process.emitWarning;
+process.emitWarning = function filteredWarning(warning, ...args) {
+  const type = typeof args[0] === 'string' ? args[0] : args[0]?.type;
+  const name = warning?.name || type;
+  const message = typeof warning === 'string' ? warning : warning?.message;
+  if (name === 'ExperimentalWarning' && /SQLite/i.test(message || '')) return;
+  return emitWarning.call(this, warning, ...args);
+};
 
-const port = Number(process.env.PORT) || 3100;
-const host = process.env.HOST || '127.0.0.1';
+const [major, minor] = process.versions.node.split('.').map(Number);
+if (major < 22 || (major === 22 && minor < 13)) {
+  console.error(`Notizzettel braucht Node.js 22.13 oder neuer (gefunden: ${process.versions.node}).`);
+  process.exit(1);
+}
 
-const app = express();
-app.disable('x-powered-by');
-
-app.use((req, res, next) => {
-  res.set({
-    'Content-Security-Policy':
-      "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; " +
-      "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'same-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  });
-  next();
-});
-
-app.use(express.static(publicDir, { index: false }));
-
-// App-Routen liefern immer die App-Shell aus.
-const appRoutes = ['/', '/papierkorb', '/login'];
-app.get(appRoutes, (req, res) => {
-  res.set('Cache-Control', 'no-cache');
-  res.sendFile(path.join(publicDir, 'index.html'));
-});
-
-app.use((req, res) => res.status(404).type('text').send('Nicht gefunden'));
-
-app.listen(port, host, () => {
-  console.log(`Notizzettel läuft auf http://${host}:${port}`);
-});
+const { start } = await import('./src/app.js');
+start();

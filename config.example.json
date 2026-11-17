@@ -1,0 +1,7 @@
+{
+  "port": 3100,
+  "host": "0.0.0.0",
+  "baseUrl": "https://notes.example.com",
+  "trustProxy": true,
+  "disable2fa": false
+}
