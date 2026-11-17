@@ -1,0 +1,33 @@
+// Inline-SVG-Icons (Strichstärke 1.75, currentColor)
+const a = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
+
+export const icons = {
+  logo: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <rect x="6" y="5" width="21" height="24" rx="1.5" fill="#ece6d6"/>
+    <rect x="4.5" y="3.5" width="21" height="24" rx="1.5" fill="#fffdf7" stroke="rgba(0,0,0,.18)"/>
+    <rect x="4" y="3" width="22" height="5" rx="1.5" fill="#8e3c2f"/>
+    <path d="M9.5 8v19.5" stroke="#eba3a0"/>
+    <path d="M7 13h16M7 17h16M7 21h16M7 25h16" stroke="#c7d8ea"/>
+    <path d="M12 16.6h8M12 20.6h5" stroke="#2b2924" stroke-width="1.4" stroke-linecap="round"/>
+  </svg>`,
+  menu: `<svg ${a}><path d="M4 7h16M4 12h16M4 17h16"/></svg>`,
+  plus: `<svg ${a}><path d="M12 5v14M5 12h14"/></svg>`,
+  trash: `<svg ${a}><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/></svg>`,
+  restore: `<svg ${a}><path d="M4 10h11a5 5 0 0 1 0 10h-4"/><path d="M8 6l-4 4 4 4"/></svg>`,
+  user: `<svg ${a}><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-3.5 4.4-5 8-5s6.5 1.5 8 5"/></svg>`,
+  back: `<svg ${a}><path d="M19 12H5M11 6l-6 6 6 6"/></svg>`,
+  close: `<svg ${a}><path d="M6 6l12 12M18 6L6 18"/></svg>`,
+  check: `<svg ${a}><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`,
+  device: `<svg ${a}><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M11 18h2"/></svg>`,
+  key: `<svg ${a}><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3M14 9l2 2"/></svg>`,
+  chevronDown: `<svg ${a}><path d="M6 9l6 6 6-6"/></svg>`,
+  warning: `<svg ${a}><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
+};
+
+/** Ersetzt alle [data-icon]-Platzhalter unterhalb von root durch das SVG. */
+export function hydrateIcons(root = document) {
+  for (const el of root.querySelectorAll('[data-icon]:empty')) {
+    const svg = icons[el.dataset.icon];
+    if (svg) el.innerHTML = svg;
+  }
+}
