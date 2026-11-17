@@ -17,7 +17,7 @@
   /* Umgebung hell */
   /* Unterlage: Leinen */
   --linen: #d4cec2;
-  --linen-strength: .26;
+  --linen-strength: .15;
   --linen-vignette: rgba(60, 45, 20, .16);
   --panel: #f3efe7;
   --panel-border: rgba(60, 50, 30, .12);
@@ -41,24 +41,20 @@
   --toast-text: #f6f2ea;
   --toast-accent: #9cc2ee;
 
-  /* Knöpfe: leicht getöntes Glas */
-  --glass-top: #ffffff;
-  --glass-bot: #ebe6dc;
-  --glass-border: rgba(60, 50, 30, .20);
-  --glass-border-b: rgba(60, 50, 30, .34);
-  --glass-hi: rgba(255, 255, 255, .95);
-  --glass-glow: rgba(255, 255, 255, .55);
-  --glass-drop: 0 1px 2px rgba(40, 30, 10, .14), 0 2px 6px -2px rgba(40, 30, 10, .14);
-  --glass-press-top: #e2ddd2;
-  --glass-press-bot: #efebe3;
-  --glass-press-shadow: inset 0 1px 3px rgba(40, 30, 10, .22);
-  --glass-hover: brightness(1.025);
-  --tint-top: #4f84c1;
-  --tint-bot: #2b578b;
-  --tint-border: #20446f;
-  --red-top: #d35d50;
-  --red-bot: #a6342b;
-  --red-border: #80261f;
+  /* Knöpfe: Glas mit Lichtkante am Rand */
+  --glass-fill: rgba(252, 250, 245, .80);
+  --glass-fill-hover: rgba(255, 255, 255, .92);
+  --glass-fill-press: rgba(232, 227, 218, .92);
+  --glass-rim-1: rgba(255, 255, 255, 1);
+  --glass-rim-2: rgba(255, 255, 255, .15);
+  --glass-line: rgba(60, 50, 30, .18);
+  --glass-drop: 0 1px 2px rgba(40, 30, 10, .08), 0 4px 14px -4px rgba(40, 30, 10, .20);
+  --glass-pill: rgba(60, 50, 30, .10);
+  --glass-sep: rgba(60, 50, 30, .12);
+  --tint-fill: #34679f;
+  --tint-fill-hover: #3b73b0;
+  --red-fill: #b53d33;
+  --red-fill-hover: #c4473c;
   --field-inset: inset 0 1px 2px rgba(40, 30, 10, .08);
 
   /* Papier – bleibt immer hell */
@@ -83,7 +79,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --linen: #2d2f33;
-    --linen-strength: .42;
+    --linen-strength: .22;
     --linen-vignette: rgba(0, 0, 0, .35);
     --panel: #222428;
     --panel-border: rgba(255, 255, 255, .07);
@@ -106,23 +102,19 @@
     --toast-bg: #ece7dd;
     --toast-text: #23221f;
     --toast-accent: #2f5b8c;
-    --glass-top: #4b4e54;
-    --glass-bot: #36393e;
-    --glass-border: rgba(0, 0, 0, .55);
-    --glass-border-b: rgba(0, 0, 0, .75);
-    --glass-hi: rgba(255, 255, 255, .14);
-    --glass-glow: rgba(255, 255, 255, .05);
-    --glass-drop: 0 1px 2px rgba(0, 0, 0, .45), 0 2px 6px -2px rgba(0, 0, 0, .45);
-    --glass-press-top: #2a2c30;
-    --glass-press-bot: #36393d;
-    --glass-press-shadow: inset 0 1px 3px rgba(0, 0, 0, .55);
-    --glass-hover: brightness(1.1);
-    --tint-top: #5b91cf;
-    --tint-bot: #2f5f97;
-    --tint-border: #14304f;
-    --red-top: #d8665a;
-    --red-bot: #a2372e;
-    --red-border: #5c1a15;
+    --glass-fill: rgba(66, 69, 75, .72);
+    --glass-fill-hover: rgba(80, 83, 90, .80);
+    --glass-fill-press: rgba(42, 44, 48, .88);
+    --glass-rim-1: rgba(255, 255, 255, .42);
+    --glass-rim-2: rgba(255, 255, 255, .05);
+    --glass-line: rgba(0, 0, 0, .55);
+    --glass-drop: 0 1px 2px rgba(0, 0, 0, .35), 0 4px 14px -4px rgba(0, 0, 0, .55);
+    --glass-pill: rgba(0, 0, 0, .32);
+    --glass-sep: rgba(255, 255, 255, .08);
+    --tint-fill: #3c6fa9;
+    --tint-fill-hover: #457bb8;
+    --red-fill: #b0453b;
+    --red-fill-hover: #be5045;
     --field-inset: inset 0 1px 2px rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
@@ -348,7 +340,7 @@ a { color: var(--accent); }
   box-sizing: content-box;
 }
 .spacer { flex: 1; }
-.divider { width: 1px; height: 22px; margin: 0 2px; background: var(--glass-border); }
+.divider { width: 1px; height: 22px; margin: 0 2px; background: var(--glass-sep); }
 
 .icon-btn, .fmt-btn {
   display: inline-flex;
@@ -362,51 +354,68 @@ a { color: var(--accent); }
   user-select: none;
 }
 
-/* Glas-Optik: Verlauf, feine Kante, Lichtkante oben, leichter Schlagschatten */
+/* Glas: ruhige, leicht durchscheinende Füllung. Die helle Lichtkante am Rand
+   (oben links und unten rechts am stärksten) lässt den Knopf gewölbt wirken. */
 .glass,
 .topbar .icon-btn,
 .btn {
-  background:
-    linear-gradient(to bottom, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(to bottom, var(--glass-top), var(--glass-bot));
-  border: 1px solid var(--glass-border);
-  border-bottom-color: var(--glass-border-b);
-  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 1px var(--glass-glow), var(--glass-drop);
+  --fill: var(--glass-fill);
+  --rim-1: var(--glass-rim-1);
+  --rim-2: var(--glass-rim-2);
+  position: relative;
+  background: var(--fill);
+  border: 0;
+  box-shadow: 0 0 0 .5px var(--glass-line), var(--glass-drop);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+  transition: transform .14s ease, background-color .15s ease;
+}
+.glass::before,
+.topbar .icon-btn::before,
+.btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(145deg, var(--rim-1) 0%, var(--rim-2) 32%, var(--rim-2) 68%, var(--rim-1) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
 }
 
 .topbar .icon-btn {
   width: 40px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: 17px;
 }
 .topbar .icon-btn [data-icon] { width: 19px; height: 19px; }
 .topbar .icon-btn:hover:not(:disabled),
-.btn:hover { filter: var(--glass-hover); }
+.btn:hover { --fill: var(--glass-fill-hover); }
 .topbar .icon-btn:active:not(:disabled),
-.btn:active,
-.fmt-btn:active,
-.fmt-btn[aria-pressed="true"] {
-  background: linear-gradient(to bottom, var(--glass-press-top), var(--glass-press-bot));
-  box-shadow: var(--glass-press-shadow);
-}
-.topbar .icon-btn:disabled { opacity: .45; cursor: default; box-shadow: inset 0 1px 0 var(--glass-hi); }
+.btn:active { --fill: var(--glass-fill-press); transform: scale(.96); }
+.topbar .icon-btn:disabled { opacity: .45; cursor: default; }
 
-/* B I U als zusammenhängende Segmentgruppe */
+/* B I U als zusammenhängende Gruppe, aktives Format als eingelassene Pille */
 .fmt { display: flex; align-items: center; gap: 8px; }
 .segmented {
   display: inline-flex;
-  border-radius: 9px;
-  overflow: hidden;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 17px;
 }
 .fmt-btn {
-  width: 40px;
-  height: 32px;
+  width: 38px;
+  height: 30px;
   font-size: 16px;
-  border-radius: 0;
+  border-radius: 15px;
+  transition: background-color .15s ease;
 }
-.segmented .fmt-btn + .fmt-btn { border-left: 1px solid var(--glass-border); }
-.fmt-btn[aria-pressed="true"] { color: var(--accent); }
-.fmt-done { display: none; width: 40px; height: 34px; border-radius: 9px; }
+.fmt-btn:hover { background: var(--glass-pill); }
+.fmt-btn[aria-pressed="true"] { background: var(--glass-pill); color: var(--accent); }
+.fmt-btn:active { background: var(--glass-pill); }
+.fmt-done { display: none; width: 40px; height: 34px; border-radius: 17px; }
 
 .status {
   display: flex;
@@ -682,8 +691,8 @@ body[data-view="login"] .fmt { display: none; }
   justify-content: center;
   gap: 8px;
   min-height: 44px;
-  padding: 0 18px;
-  border-radius: 10px;
+  padding: 0 20px;
+  border-radius: 22px;
   color: var(--text);
   font-size: 15px;
   font-weight: 700;
@@ -696,32 +705,27 @@ body[data-view="login"] .fmt { display: none; }
 .btn-primary,
 .btn-danger-fill {
   color: #fff;
-  text-shadow: 0 -1px 0 rgba(0, 0, 0, .28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 2px rgba(255, 255, 255, .14), var(--glass-drop);
+  --rim-1: rgba(255, 255, 255, .65);
+  --rim-2: rgba(255, 255, 255, .10);
 }
-.btn-primary {
-  background:
-    linear-gradient(to bottom, rgba(255, 255, 255, .2), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(to bottom, var(--tint-top), var(--tint-bot));
-  border-color: var(--tint-border);
-}
-.btn-danger-fill {
-  background:
-    linear-gradient(to bottom, rgba(255, 255, 255, .2), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(to bottom, var(--red-top), var(--red-bot));
-  border-color: var(--red-border);
-}
+.btn-primary { --fill: var(--tint-fill); }
+.btn-primary:hover { --fill: var(--tint-fill-hover); }
+.btn-danger-fill { --fill: var(--red-fill); }
+.btn-danger-fill:hover { --fill: var(--red-fill-hover); }
 .btn-primary:active,
-.btn-danger-fill:active { filter: brightness(.92); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35); }
+.btn-danger-fill:active { filter: brightness(.92); }
 .btn-danger { color: var(--danger); }
-.btn-small { min-height: 36px; padding: 0 12px; font-size: 13px; border-radius: 9px; }
+.btn-small { min-height: 36px; padding: 0 14px; font-size: 13px; border-radius: 18px; }
 .btn-block { width: 100%; }
 .btn-link,
 .btn-link:hover,
 .btn-link:active {
+  transform: none;
   min-height: 0; padding: 4px 0; border: 0; background: none; box-shadow: none; filter: none;
   color: var(--accent); font-weight: 400; font-size: 14px; text-shadow: none;
 }
+.btn-link::before { display: none; }
+.btn-link { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .btn-link:hover { text-decoration: underline; }
 .btn-link [data-icon] { width: 16px; height: 16px; }
 
@@ -893,7 +897,9 @@ body[data-view="login"] .fmt { display: none; }
     transform: translateY(var(--kb-offset, 0px));
     will-change: transform;
   }
-  .fmt-btn { width: 52px; height: 36px; font-size: 18px; }
+  .fmt-btn { width: 50px; height: 34px; font-size: 18px; border-radius: 17px; }
+  .segmented, .fmt-done { border-radius: 19px; }
+  .fmt-done { height: 38px; width: 46px; }
   .fmt-done { display: inline-flex; position: absolute; right: 10px; }
   body:not(.is-editing) .fmt { display: none; }
   body.is-editing .view-editor { padding-bottom: 80px; }
