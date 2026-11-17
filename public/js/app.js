@@ -2,10 +2,15 @@
 
 import { hydrateIcons } from './icons.js';
 import { uuid, debounce, longDate, html } from './util.js';
-import { NoteStore } from './store.js';
+import { NoteStore, LOCAL_DB, userDbName } from './store.js';
 import { Editor } from './editor.js';
 import { toast, confirmDialog, Drawer, trackKeyboard } from './ui.js';
-import { renderHistory, renderTrash, renderLogin } from './views.js';
+import { renderHistory, renderTrash } from './views.js';
+import { api } from './api.js';
+import { Sync } from './sync.js';
+import {
+  cachedUser, rememberUser, renderSetup, renderLogin, renderAccount, logout, TAB_ID,
+} from './auth.js';
 
 const $ = (id) => document.getElementById(id);
 const finePointer = window.matchMedia('(pointer: fine)');
@@ -14,7 +19,10 @@ const ROUTES = {
   '/': 'editor',
   '/papierkorb': 'trash',
   '/login': 'login',
+  '/setup': 'setup',
+  '/konto': 'account',
 };
+const VIEWS = ['editor', 'trash', 'login', 'setup', 'account'];
 
 const state = {
   /** @type {NoteStore} */ store: null,
@@ -24,6 +32,12 @@ const state = {
   current: { id: null, saved: '', createdAt: Date.now() },
   view: 'editor',
   channel: null,
+  /** Antwort von /api/status (null = Server nicht erreichbar) */
+  status: null,
+  /** angemeldeter Benutzer (auch offline: zuletzt bekannter) */
+  user: null,
+  sessionExpired: false,
+  /** @type {Sync|null} */ sync: null,
 };
 
 // ---------- Speichern -------------------------------------------------------
@@ -156,6 +170,28 @@ async function deleteCurrent() {
   await refreshSidebar();
 }
 
+/** Änderungen vom Server am gerade offenen Zettel übernehmen */
+async function onRemoteChange(ids) {
+  const cur = state.current;
+  if (!cur.id || !ids.includes(cur.id)) return;
+  const note = await state.store.get(cur.id);
+  if (!note || note.deletedAt) {
+    resetToFresh();
+    toast('Dieser Zettel wurde auf einem anderen Gerät gelöscht.');
+    return;
+  }
+  // Nur ersetzen, wenn hier gerade nichts Ungespeichertes steht
+  const untouched = !saveSoon.pending() && state.editor.getContent() === cur.saved;
+  if (untouched && note.html !== cur.saved) {
+    const hadFocus = state.editor.hasFocus();
+    cur.saved = note.html;
+    cur.createdAt = note.createdAt;
+    state.editor.setContent(note.html);
+    showStamp();
+    if (hadFocus) state.editor.focusEnd();
+  }
+}
+
 // ---------- Anzeige ---------------------------------------------------------
 
 function showStamp() {
@@ -170,7 +206,9 @@ function setStatus(kind) {
   clearTimeout(statusTimer);
   if (kind === 'saved') {
     el.innerHTML = String(html`<span data-icon="check"></span><span>Gespeichert</span>`);
-    el.title = 'Auf diesem Gerät gespeichert';
+    el.title = !state.user ? 'Auf diesem Gerät gespeichert'
+      : state.sync?.state === 'offline' ? 'Auf diesem Gerät gespeichert – wird übertragen, sobald du online bist'
+        : 'Gespeichert und mit deinem Konto abgeglichen';
     hydrateIcons(el);
     el.classList.add('is-visible');
     statusTimer = setTimeout(() => el.classList.remove('is-visible'), 2500);
@@ -184,12 +222,47 @@ function setStatus(kind) {
   }
 }
 
+/** Dauerhafte Anzeige, wenn der Abgleich nicht klappt */
+function setSyncBadge(kind) {
+  const el = $('sync-badge');
+  if (!kind) {
+    el.hidden = true;
+    return;
+  }
+  const map = {
+    offline: ['cloudOff', 'Offline', 'Keine Verbindung – Änderungen werden übertragen, sobald du wieder online bist.'],
+    error: ['warning', 'Abgleich gestört', 'Der Abgleich mit dem Server ist fehlgeschlagen. Es wird regelmäßig erneut versucht.'],
+    auth: ['cloudOff', 'Abgemeldet', 'Deine Sitzung ist abgelaufen. Melde dich an, um weiter abzugleichen.'],
+  };
+  const [icon, label, title] = map[kind];
+  el.innerHTML = String(html`<span data-icon="${icon}"></span><span>${label}</span>`);
+  el.title = title;
+  hydrateIcons(el);
+  el.hidden = false;
+}
+
+function updateAccountLink() {
+  const link = $('account-link');
+  link.setAttribute('href', state.user ? '/konto' : '/login');
+  $('account-label').textContent = state.user ? state.user.name : 'Anmelden';
+}
+
 function updateToolbar() {
   $('btn-delete').disabled = !state.current.id;
   const s = state.editor.hasFocus() ? state.editor.state() : {};
   for (const btn of document.querySelectorAll('.fmt-btn[data-cmd]')) {
     btn.setAttribute('aria-pressed', String(!!s[btn.dataset.cmd]));
   }
+}
+
+let sidebarTimer = null;
+/** Mehrere Änderungen kurz hintereinander nur einmal darstellen */
+function scheduleSidebar() {
+  if (sidebarTimer) return;
+  sidebarTimer = setTimeout(() => {
+    sidebarTimer = null;
+    refreshSidebar();
+  }, 30);
 }
 
 async function refreshSidebar() {
@@ -211,27 +284,46 @@ function navigate(path, { replace = false } = {}) {
 }
 
 async function render() {
-  const view = ROUTES[location.pathname] ?? 'editor';
-  if (!ROUTES[location.pathname]) history.replaceState(null, '', '/');
+  const path = location.pathname;
+  let view = ROUTES[path];
+  if (!view) {
+    history.replaceState(null, '', '/');
+    view = 'editor';
+  }
+  // Weiterleitungen je nach Anmeldestatus
+  if (view === 'login' && state.user && !state.sessionExpired) return navigate('/konto', { replace: true });
+  if (view === 'account' && !state.user) return navigate('/login', { replace: true });
+
   const prev = state.view;
   state.view = view;
   document.body.dataset.view = view;
-  $('view-editor').hidden = view !== 'editor';
-  $('view-trash').hidden = view !== 'trash';
-  $('view-login').hidden = view !== 'login';
+  for (const v of VIEWS) $(`view-${v}`).hidden = v !== view;
   $('trash-link').setAttribute('aria-current', view === 'trash' ? 'page' : 'false');
-  $('account-link').setAttribute('aria-current', view === 'login' ? 'page' : 'false');
+  $('account-link').setAttribute('aria-current', ['login', 'account', 'setup'].includes(view) ? 'page' : 'false');
   state.drawer?.hide();
+  if (prev === 'editor' && view !== 'editor') await saveNow();
 
+  const status = state.status ?? { setupRequired: false, user: state.user, features: {} };
   if (view === 'trash') {
-    if (prev === 'editor') await saveNow();
     renderTrash($('view-trash'), await state.store.trash());
     document.title = 'Papierkorb – Notizzettel';
   } else if (view === 'login') {
-    renderLogin($('view-login'));
+    renderLogin($('view-login'), status, { expired: state.sessionExpired });
     document.title = 'Anmelden – Notizzettel';
+  } else if (view === 'setup') {
+    renderSetup($('view-setup'), status);
+    document.title = 'Einrichtung – Notizzettel';
+  } else if (view === 'account') {
+    renderAccount($('view-account'), state.user, {
+      onLogout: () => logout({ store: state.store, sync: state.sync }),
+    });
+    document.title = 'Mein Konto – Notizzettel';
   } else {
     document.title = 'Notizzettel';
+  }
+  // Fokus auf das erste Eingabefeld von Karten (nur mit Maus/Tastatur)
+  if (view !== 'editor' && view !== 'trash' && finePointer.matches) {
+    $(`view-${view}`).querySelector('input:not([type=hidden]):not([type=checkbox])')?.focus();
   }
 }
 
@@ -250,7 +342,7 @@ function appleDevice() {
 
 let hintChecked = false;
 async function maybeShowHomescreenHint() {
-  if (hintChecked) return;
+  if (hintChecked || state.user) return;
   hintChecked = true;
   const device = appleDevice();
   if (!device || isStandalone()) return;
@@ -276,10 +368,30 @@ async function maybeShowHomescreenHint() {
 
 // ---------- Start -----------------------------------------------------------
 
+/** Fragt den Server nach Einrichtung und Anmeldung. Offline: zuletzt bekannter Benutzer. */
+async function loadStatus() {
+  const cached = cachedUser();
+  try {
+    state.status = await api('GET', '/api/status', undefined, { timeout: 6000 });
+  } catch {
+    state.status = null;
+    state.user = cached;
+    return;
+  }
+  state.user = state.status.user;
+  if (state.user) rememberUser(state.user);
+  else if (cached) state.sessionExpired = true;
+}
+
 async function main() {
   hydrateIcons();
-  state.store = await new NoteStore('notizzettel-lokal').open();
+  await loadStatus();
+  state.store = state.user
+    ? await new NoteStore(userDbName(state.user.id), { synced: true }).open()
+    : await new NoteStore(LOCAL_DB).open();
   await state.store.purgeExpired();
+  if (state.status?.setupRequired && location.pathname === '/') history.replaceState(null, '', '/setup');
+  updateAccountLink();
   // Leer gebliebene Zettel (z. B. Fenster geschlossen nach Löschen allen Texts) entfernen
   for (const n of await state.store.list()) {
     if (!n.title && !n.html.replace(/<[^>]*>/g, '')) await state.store.remove(n.id);
@@ -359,21 +471,43 @@ async function main() {
     }
   });
 
-  // Anmeldung (Prototyp)
-  $('view-login').addEventListener('submit', (e) => {
-    e.preventDefault();
-    toast('Die Anmeldung folgt in Schritt 2.');
-  });
-  $('view-login').addEventListener('click', (e) => {
-    if (e.target.closest('#btn-passkey, #btn-forgot')) toast('Folgt in einem späteren Schritt.');
+  document.addEventListener('notizzettel:user', (e) => {
+    state.user = e.detail;
+    updateAccountLink();
   });
 
-  state.store.addEventListener('change', () => refreshSidebar());
+  state.store.addEventListener('change', scheduleSidebar);
 
-  // Andere Tabs informieren
+  // Andere Tabs informieren (bei An-/Abmeldung neu laden)
   if ('BroadcastChannel' in window) {
     state.channel = new BroadcastChannel('notizzettel');
-    state.channel.onmessage = () => refreshSidebar();
+    state.channel.onmessage = (e) => {
+      if (e.data?.type === 'reload') {
+        if (e.data.from !== TAB_ID) location.reload();
+      } else scheduleSidebar();
+    };
+  }
+
+  // Abgleich mit dem Server
+  if (state.user) {
+    const sync = new Sync(state.store);
+    state.sync = sync;
+    sync.addEventListener('state', (e) => {
+      const s = e.detail;
+      if (s === 'ok') setSyncBadge(null);
+      else if (s === 'offline' || s === 'error') setSyncBadge(s);
+      else if (s === 'auth') {
+        setSyncBadge('auth');
+        state.sessionExpired = true;
+        toast('Deine Sitzung ist abgelaufen.', { action: 'Anmelden', onAction: () => navigate('/login') });
+      }
+    });
+    sync.addEventListener('remote', (e) => onRemoteChange(e.detail.ids));
+    sync.start();
+  } else if (state.sessionExpired) {
+    toast('Deine Sitzung ist abgelaufen. Deine Zettel bleiben erhalten.', {
+      action: 'Anmelden', onAction: () => navigate('/login'), duration: 10000,
+    });
   }
 
   // Beim Verlassen sofort speichern

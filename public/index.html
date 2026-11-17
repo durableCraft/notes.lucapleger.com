@@ -30,7 +30,7 @@
         </a>
         <a class="foot-btn" href="/login" data-link id="account-link">
           <span data-icon="user"></span>
-          <span>Anmelden</span>
+          <span id="account-label">Anmelden</span>
         </a>
       </footer>
     </aside>
@@ -42,6 +42,7 @@
           <span data-icon="menu"></span>
         </button>
         <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="status sync-badge" id="sync-badge" role="status" hidden></div>
         <div class="spacer"></div>
         <div class="fmt" id="fmt" role="toolbar" aria-label="Formatierung">
           <div class="segmented glass">
@@ -76,6 +77,8 @@
 
       <section class="view view-page" id="view-trash" hidden></section>
       <section class="view view-page" id="view-login" hidden></section>
+      <section class="view view-page" id="view-setup" hidden></section>
+      <section class="view view-page" id="view-account" hidden></section>
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden>

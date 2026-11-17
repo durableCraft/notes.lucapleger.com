@@ -61,34 +61,3 @@ export function renderTrash(container, notes) {
     </div>`);
   hydrateIcons(container);
 }
-
-/** Anmeldung – Prototyp (Funktion folgt in Schritt 2) */
-export function renderLogin(container) {
-  container.innerHTML = String(html`
-    <div class="card narrow">
-      <h1 class="card-title">Anmelden</h1>
-      <p class="card-sub">Mit Konto liegen deine Zettel sicher auf dem Server und sind auf all deinen Geräten da.</p>
-      <form id="login-form" novalidate>
-        <label class="field">
-          <span class="field-label">E-Mail</span>
-          <input class="input" type="email" name="email" autocomplete="username webauthn" inputmode="email" required>
-        </label>
-        <label class="field">
-          <span class="field-label">Passwort</span>
-          <input class="input" type="password" name="password" autocomplete="current-password" required>
-        </label>
-        <label class="check">
-          <input type="checkbox" name="remember" checked>
-          <span>Angemeldet bleiben</span>
-        </label>
-        <button class="btn btn-primary btn-block" type="submit">Anmelden</button>
-      </form>
-      <div class="sep">oder</div>
-      <button class="btn btn-block" type="button" id="btn-passkey"><span data-icon="key"></span>Mit Passkey anmelden</button>
-      <div class="card-foot">
-        <a class="btn btn-link" href="/" data-link><span data-icon="back"></span>Ohne Anmeldung weiter</a>
-        <button class="btn btn-link" type="button" id="btn-forgot">Passwort vergessen?</button>
-      </div>
-    </div>`);
-  hydrateIcons(container);
-}

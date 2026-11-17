@@ -469,10 +469,9 @@ a { color: var(--accent); }
 
 .only-drawer { display: none; }
 
-body[data-view="trash"] .editor-only,
-body[data-view="trash"] .fmt,
-body[data-view="login"] .editor-only,
-body[data-view="login"] .fmt { display: none; }
+/* Formatierung und Löschen nur beim Zettel */
+body:not([data-view="editor"]) .editor-only,
+body:not([data-view="editor"]) .fmt { display: none; }
 
 /* ---------- Ansichten ----------------------------------------------------- */
 
@@ -947,3 +946,55 @@ body[data-view="login"] .fmt { display: none; }
 }
 
 .trash-list + .card-foot { border-top: 0; margin-top: 8px; padding-top: 12px; }
+
+/* ---------- Formulare: Fehler, Hinweise, Abschnitte ----------------------- */
+
+.form-error {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(180, 57, 43, .10);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.field-hint code {
+  font-family: inherit;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--text);
+  white-space: nowrap;
+}
+form > .field-hint { margin-top: 12px; }
+.input-token { text-transform: uppercase; letter-spacing: .08em; }
+.input-token::placeholder { letter-spacing: .08em; }
+
+.card-section + .card-section,
+.card-sub + .card-section {
+  margin-top: 6px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--card-border);
+}
+.card-section + .card-section { margin-top: 22px; }
+.section-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.inline-form { display: flex; gap: 10px; align-items: center; }
+.inline-form .input { flex: 1; min-width: 0; }
+
+/* dauerhafte Abgleich-Anzeige (offline usw.) */
+.sync-badge { opacity: 1; color: var(--muted); }
+
+/* Dialog immer mittig (überschreibt die Abstände der Karten) */
+.dialog.card { margin: auto; }

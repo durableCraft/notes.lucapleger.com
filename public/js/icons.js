@@ -21,6 +21,9 @@ export const icons = {
   device: `<svg ${a}><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M11 18h2"/></svg>`,
   key: `<svg ${a}><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3M14 9l2 2"/></svg>`,
   chevronDown: `<svg ${a}><path d="M6 9l6 6 6-6"/></svg>`,
+  logout: `<svg ${a}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 8l-4 4 4 4M6 12h10"/></svg>`,
+  cloud: `<svg ${a}><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.5 4.25 4.25 0 0 0 7 18z"/></svg>`,
+  cloudOff: `<svg ${a}><path d="M3 3l18 18"/><path d="M8.5 6.4A6 6 0 0 1 17.5 10a4 4 0 0 1 2.4 6.9M16 18H7a4.25 4.25 0 0 1-.9-8.5"/></svg>`,
   warning: `<svg ${a}><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
 };
 
