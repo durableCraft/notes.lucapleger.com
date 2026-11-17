@@ -58,6 +58,27 @@ const migrations = [
   );
   INSERT INTO settings (key, value) VALUES ('rev', '0');
   `,
+  // 2: Einmal-Tokens (Einladungen, Passwort-Reset, Anmelde-Codes)
+  `
+  CREATE TABLE tokens (
+    id          INTEGER PRIMARY KEY,
+    token_hash  TEXT    NOT NULL UNIQUE,
+    kind        TEXT    NOT NULL CHECK (kind IN ('invite', 'reset', 'login_code')),
+    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    email       TEXT,
+    name        TEXT,
+    role        TEXT,
+    created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    used_at     INTEGER,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    sends       INTEGER NOT NULL DEFAULT 1,
+    last_sent_at INTEGER,
+    data        TEXT
+  );
+  CREATE INDEX tokens_kind ON tokens(kind, expires_at);
+  `,
 ];
 
 let db = null;

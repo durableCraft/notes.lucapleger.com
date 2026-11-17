@@ -45,4 +45,7 @@ export const limits = {
   loginAccount: new RateLimiter({ windowMs: 15 * MIN, max: 8 }),
   setupIp: new RateLimiter({ windowMs: 15 * MIN, max: 10 }),
   passwordUser: new RateLimiter({ windowMs: 15 * MIN, max: 10 }),
+  codeIp: new RateLimiter({ windowMs: 15 * MIN, max: 30 }),
+  forgotIp: new RateLimiter({ windowMs: 60 * MIN, max: 10 }),
+  forgotAccount: new RateLimiter({ windowMs: 60 * MIN, max: 3 }),
 };

@@ -74,7 +74,11 @@ export function errorHandler(err, req, res, next) { // eslint-disable-line no-un
   if (err.type === 'entity.too.large') err = new HttpError(413, 'Der Inhalt ist zu groß.');
   else if (err.type === 'entity.parse.failed') err = badRequest('Ungültige Daten.');
   const status = err.status && err.status >= 400 && err.status < 600 ? err.status : 500;
-  if (status >= 500) console.error(err);
+  if (status >= 500) {
+    // eigene Fehler (z. B. Mail nicht versendbar) sind schon protokolliert
+    if (err instanceof HttpError) console.error(`${req.method} ${req.originalUrl}: ${err.message}`);
+    else console.error(err);
+  }
   if (err.extra?.retryAfter) res.set('Retry-After', String(err.extra.retryAfter));
   const body = { error: status >= 500 ? 'Interner Fehler. Bitte versuche es später erneut.' : err.message };
   if (err.extra && status < 500) Object.assign(body, err.extra);

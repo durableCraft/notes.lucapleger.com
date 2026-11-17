@@ -3,6 +3,7 @@
 import { all, run, tx } from './db.js';
 import { purgeNote } from './routes/notes.js';
 import { cleanupSessions } from './session.js';
+import { cleanupTokens } from './tokens.js';
 
 const DAY = 86_400_000;
 export const TRASH_DAYS = 30;
@@ -19,6 +20,7 @@ export function runDailyJobs(now = Date.now()) {
   // haben die Zettel inzwischen ohnehin selbst aus dem Papierkorb gelöscht)
   const tombstones = run('DELETE FROM notes WHERE purged = 1 AND updated_at < ?', now - TOMBSTONE_DAYS * DAY).changes;
   const sessions = cleanupSessions();
+  cleanupTokens(now);
   if (purged || tombstones || sessions) {
     console.log(`Aufräumen: ${purged} Zettel aus dem Papierkorb gelöscht, ${tombstones} Grabsteine, ${sessions} abgelaufene Sitzungen.`);
   }
