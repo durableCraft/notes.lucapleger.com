@@ -1,0 +1,8 @@
+# Laufzeitdaten (Datenbank, Konfiguration mit Zugangsdaten, Backups)
+data/
+
+# Editor/OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
