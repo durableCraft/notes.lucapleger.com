@@ -6,7 +6,7 @@
 //   node cli.js help
 //
 // Auf dem Server als Dienst-Benutzer ausführen, z. B.:
-//   sudo -u notizzettel node cli.js backup
+//   runuser -u notizzettel -- node cli.js backup
 
 import './src/warnings.js';
 

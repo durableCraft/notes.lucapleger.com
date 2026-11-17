@@ -22,7 +22,7 @@ const HELP = `Notizzettel – Kommandozeile
   node cli.js users
       Listet alle Benutzer auf.
 
-Hinweis: Als Dienst-Benutzer ausführen, z. B. sudo -u notizzettel node cli.js backup
+Hinweis: Als Dienst-Benutzer ausführen, z. B. runuser -u notizzettel -- node cli.js backup
 Notfall bei Zwei-Faktor-Problemen: in data/config.json "disable2fa": true setzen.`;
 
 function stamp(d = new Date()) {

@@ -1,0 +1,46 @@
+# Notizzettel – systemd-Dienst
+#
+# Installation (als root):
+#   cp /opt/notizzettel/deploy/notizzettel.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now notizzettel
+#
+# Pfade anpassen, falls das Repository nicht unter /opt/notizzettel liegt.
+
+[Unit]
+Description=Notizzettel – selbst gehostetes Notiz-Tool
+Documentation=https://github.com/durableCraft/notes.lucapleger.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=notizzettel
+Group=notizzettel
+WorkingDirectory=/opt/notizzettel
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+# Neue Dateien (Datenbank, Backups) nur für den Dienst-Benutzer lesbar
+UMask=0077
+NoNewPrivileges=true
+
+# Zusätzliche Abschottung. Sie braucht Namespaces; in einem unprivilegierten
+# Proxmox-LXC funktioniert das nur mit der Container-Option "nesting=1".
+# Startet der Dienst mit "status=226/NAMESPACE" nicht, diese Zeilen
+# auskommentiert lassen.
+#ProtectSystem=strict
+#ReadWritePaths=/opt/notizzettel/data
+#ProtectHome=true
+#PrivateTmp=true
+#PrivateDevices=true
+#ProtectKernelTunables=true
+#ProtectKernelModules=true
+#ProtectControlGroups=true
+#RestrictSUIDSGID=true
+#LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
