@@ -80,7 +80,8 @@ export function errorHandler(err, req, res, next) { // eslint-disable-line no-un
     else console.error(err);
   }
   if (err.extra?.retryAfter) res.set('Retry-After', String(err.extra.retryAfter));
-  const body = { error: status >= 500 ? 'Interner Fehler. Bitte versuche es später erneut.' : err.message };
+  const known = err instanceof HttpError || status < 500;
+  const body = { error: known ? err.message : 'Interner Fehler. Bitte versuche es später erneut.' };
   if (err.extra && status < 500) Object.assign(body, err.extra);
   res.status(status).json(body);
 }
